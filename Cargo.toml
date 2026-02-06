@@ -1,0 +1,32 @@
+[workspace]
+members = ["rdbi", "rdbi-derive", "rdbi-codegen", "rdbi-tests"]
+exclude = ["examples/*"]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+rust-version = "1.75"
+authors = ["Jinyang Li <jinyang0524@gmail.com>"]
+license = "Apache-2.0"
+homepage = "https://github.com/a4501150/rdbi"
+repository = "https://github.com/a4501150/rdbi"
+readme = "README.md"
+keywords = ["rdbi", "database", "mysql", "dao", "orm"]
+categories = ["development-tools", "database"]
+
+[workspace.dependencies]
+# Shared dependencies
+thiserror = "2.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+async-trait = "0.1"
+tracing = "0.1"
+tokio = { version = "1.0" }
+rust_decimal = { version = "1.0", features = ["serde"] }
+
+# Workspace crates
+rdbi-derive = { version = "0.1.0", path = "rdbi-derive" }
+
+[profile.release]
+debug = true  # Keep line numbers in stack traces while optimized
