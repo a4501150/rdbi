@@ -1,0 +1,24 @@
+# Build artifacts
+/target/
+/generated/
+
+# Cargo lock for library (optional - some prefer to commit it)
+# Cargo.lock
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.*
+
+# Example build artifacts
+/examples/*/target/

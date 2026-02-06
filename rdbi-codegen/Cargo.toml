@@ -1,0 +1,48 @@
+[package]
+name = "rdbi-codegen"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords = ["rdbi", "codegen", "mysql", "dao", "code-generation"]
+categories.workspace = true
+description = "Generate Rust structs and rdbi DAO functions from MySQL schema DDL"
+
+[lib]
+name = "rdbi_codegen"
+path = "src/lib.rs"
+
+[[bin]]
+name = "rdbi-codegen"
+path = "src/main.rs"
+required-features = ["cli"]
+
+[dependencies]
+# Config & errors
+config = "0.15"
+anyhow = "1.0"
+thiserror.workspace = true
+serde.workspace = true
+toml = "0.9"
+
+# SQL parsing (no Docker needed!)
+sqlparser = { version = "0.60", features = ["serde"] }
+
+# CLI (optional, only for binary)
+clap = { version = "4.0", features = ["derive"], optional = true }
+
+# Code generation utilities
+heck = "0.5"
+
+# Logging
+tracing.workspace = true
+tracing-subscriber = { version = "0.3", features = ["env-filter"], optional = true }
+
+[features]
+default = ["cli"]
+cli = ["dep:clap", "dep:tracing-subscriber"]
+
+[dev-dependencies]
+tempfile = "3.0"

@@ -1,0 +1,18 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "packages": {
+    "rdbi": {
+      "component": "rdbi",
+      "release-type": "rust"
+    },
+    "rdbi-derive": {
+      "component": "rdbi-derive",
+      "release-type": "rust"
+    },
+    "rdbi-codegen": {
+      "component": "rdbi-codegen",
+      "release-type": "rust"
+    }
+  },
+  "separate-pull-requests": false
+}

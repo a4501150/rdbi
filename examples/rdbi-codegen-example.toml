@@ -1,0 +1,27 @@
+# rdbi-codegen example configuration file
+#
+# Usage (from repo root): rdbi-codegen --config examples/rdbi-codegen-example.toml generate
+
+# Path to the SQL schema file (relative to repo root)
+schema_file = "examples/example-schema.sql"
+
+# Table filtering
+include_tables = "*"
+exclude_tables = ""
+
+# Struct generation
+generate_structs = true
+output_structs_dir = "./generated/models"
+models_module = "models"
+
+# DAO generation
+generate_dao = true
+output_dao_dir = "./generated/dao"
+dao_module = "dao"
+
+# Execution options
+dry_run = false
+
+# Logging (trace, debug, info, warn, error)
+# Can be overridden by RUST_LOG env var
+log_level = "info"
