@@ -1,5 +1,5 @@
 {
-  "rdbi": "0.1.1",
+  "rdbi": "0.2.0",
   "rdbi-derive": "0.1.1",
-  "rdbi-codegen": "0.1.1"
+  "rdbi-codegen": "0.2.0"
 }
