@@ -75,7 +75,6 @@ CREATE TABLE users (
 schema_file = "schema.sql"
 output_structs_dir = "src/generated/models"
 output_dao_dir = "src/generated/dao"
-models_module = "generated::models"
 
 [dependencies]
 rdbi = "0.1"
@@ -119,7 +118,7 @@ async fn main() -> rdbi::Result<()> {
 <details>
 <summary>Alternative: OUT_DIR with include!()</summary>
 
-If you prefer not to commit generated code, omit the `output_*_dir` and `models_module` settings. The defaults write to `$OUT_DIR`, and you use `include!()`:
+If you prefer not to commit generated code, omit the `output_*_dir` settings. The defaults write to `$OUT_DIR`, and you use `include!()`:
 
 ```rust
 pub mod models {
@@ -363,7 +362,6 @@ For `build.rs` via `Cargo.toml`:
 schema_file = "schema.sql"
 output_structs_dir = "src/generated/models"  # Default: $OUT_DIR/models
 output_dao_dir = "src/generated/dao"          # Default: $OUT_DIR/dao
-models_module = "generated::models"           # Default: "models"
 include_tables = ["users", "orders"]          # Only these tables
 exclude_tables = ["migrations"]               # Skip these tables
 generate_structs = true

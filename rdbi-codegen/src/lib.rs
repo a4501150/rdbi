@@ -15,7 +15,6 @@
 //! schema_file = "schema.sql"
 //! output_structs_dir = "src/generated/models"
 //! output_dao_dir = "src/generated/dao"
-//! models_module = "generated::models"
 //! ```
 //!
 //! Then use a minimal `build.rs`:
@@ -233,12 +232,6 @@ struct CargoMetadataConfig {
 
     /// Output directory for generated DAOs
     output_dao_dir: Option<String>,
-
-    /// Module name for structs (default: "models")
-    models_module: Option<String>,
-
-    /// Module name for DAOs (default: "dao")
-    dao_module: Option<String>,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -322,15 +315,31 @@ pub fn generate_from_cargo_metadata() -> Result<()> {
 
     let mut builder = CodegenBuilder::new(&schema_path);
 
-    // Set output directories
-    if let Some(structs_dir) = metadata_config.output_structs_dir {
+    // Set output directories and auto-derive models_module from output path
+    if let Some(ref structs_dir) = metadata_config.output_structs_dir {
         builder = builder.output_structs_dir(PathBuf::from(&manifest_dir).join(structs_dir));
+
+        // Derive models_module from output_structs_dir path.
+        // e.g., "src/generated/models" -> "generated::models"
+        let module_path = structs_dir
+            .strip_prefix("src/")
+            .unwrap_or(structs_dir)
+            .replace('/', "::");
+        builder = builder.models_module(&module_path);
     } else {
         builder = builder.output_structs_dir(out_dir.join("models"));
     }
 
-    if let Some(dao_dir) = metadata_config.output_dao_dir {
+    if let Some(ref dao_dir) = metadata_config.output_dao_dir {
         builder = builder.output_dao_dir(PathBuf::from(&manifest_dir).join(dao_dir));
+
+        // Derive dao_module from output_dao_dir path.
+        // e.g., "src/generated/dao" -> "generated::dao"
+        let module_path = dao_dir
+            .strip_prefix("src/")
+            .unwrap_or(dao_dir)
+            .replace('/', "::");
+        builder = builder.dao_module(&module_path);
     } else {
         builder = builder.output_dao_dir(out_dir.join("dao"));
     }
@@ -359,14 +368,6 @@ pub fn generate_from_cargo_metadata() -> Result<()> {
     }
     if let Some(false) = metadata_config.generate_dao {
         builder = builder.structs_only();
-    }
-
-    // Apply module names
-    if let Some(module) = metadata_config.models_module {
-        builder = builder.models_module(&module);
-    }
-    if let Some(module) = metadata_config.dao_module {
-        builder = builder.dao_module(&module);
     }
 
     // Emit rerun-if-changed

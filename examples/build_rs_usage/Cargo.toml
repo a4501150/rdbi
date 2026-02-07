@@ -10,7 +10,6 @@ edition = "2021"
 schema_file = "schema.sql"
 output_structs_dir = "src/generated/models"
 output_dao_dir = "src/generated/dao"
-models_module = "generated::models"
 # include_tables = ["users", "orders"]
 # exclude_tables = ["migrations"]
 # generate_structs = true

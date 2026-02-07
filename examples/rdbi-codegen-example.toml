@@ -12,12 +12,10 @@ exclude_tables = ""
 # Struct generation
 generate_structs = true
 output_structs_dir = "./generated/models"
-models_module = "models"
 
 # DAO generation
 generate_dao = true
 output_dao_dir = "./generated/dao"
-dao_module = "dao"
 
 # Execution options
 dry_run = false
