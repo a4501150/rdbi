@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/a4501150/rdbi/compare/rdbi-codegen-v0.3.0...rdbi-codegen-v0.3.1) (2026-02-07)
+
+
+### Bug Fixes
+
+* resolve clippy warnings in generated DAO code ([f1127cc](https://github.com/a4501150/rdbi/commit/f1127cce5b3252f95cd8f24dd5e3330579ea18bb))
+
 ## [0.3.0](https://github.com/a4501150/rdbi/compare/rdbi-codegen-v0.2.0...rdbi-codegen-v0.3.0) (2026-02-07)
 
 
