@@ -21,15 +21,13 @@ That's it for most users. For **TLS connections** (required by most cloud databa
 
 ```toml
 [dependencies]
-rdbi = { version = "0.1", features = ["native-tls"] }
-# or
 rdbi = { version = "0.1", features = ["rustls-tls"] }
 ```
 
 | Feature | Backend | Notes |
 |---------|---------|-------|
-| `native-tls` | OS native (OpenSSL/Secure Transport/SChannel) | Requires system libraries |
-| `rustls-tls` | Rustls (pure Rust) | No system dependencies |
+| `rustls-tls` | Rustls (pure Rust, recommended) | No system dependencies, works everywhere |
+| `native-tls` | OS native (OpenSSL/Secure Transport/SChannel) | Use when you need the OS certificate store |
 
 If you want automatic code generation from SQL schemas, also add:
 
