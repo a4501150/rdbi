@@ -5,6 +5,11 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
 
 env:
   CARGO_TERM_COLOR: always
@@ -57,3 +62,71 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo test -p rdbi-tests -- --test-threads=1
+
+  release-please:
+    name: Release Please
+    needs: [check, clippy, fmt, test, integration]
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    outputs:
+      releases_created: ${{ steps.release.outputs.releases_created }}
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  publish:
+    name: Publish to crates.io
+    needs: release-please
+    if: ${{ needs.release-please.outputs.releases_created == 'true' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Publish rdbi-derive
+        run: |
+          output=$(cargo publish -p rdbi-derive 2>&1) || {
+            if echo "$output" | grep -q "already exists"; then
+              echo "rdbi-derive already published, skipping"
+            else
+              echo "$output"
+              exit 1
+            fi
+          }
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+      - name: Wait for crates.io index update
+        run: sleep 30
+
+      - name: Publish rdbi-codegen
+        run: |
+          output=$(cargo publish -p rdbi-codegen 2>&1) || {
+            if echo "$output" | grep -q "already exists"; then
+              echo "rdbi-codegen already published, skipping"
+            else
+              echo "$output"
+              exit 1
+            fi
+          }
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+      - name: Wait for crates.io index update
+        run: sleep 30
+
+      - name: Publish rdbi
+        run: |
+          output=$(cargo publish -p rdbi 2>&1) || {
+            if echo "$output" | grep -q "already exists"; then
+              echo "rdbi already published, skipping"
+            else
+              echo "$output"
+              exit 1
+            fi
+          }
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
