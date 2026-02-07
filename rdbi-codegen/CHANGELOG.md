@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/a4501150/rdbi/compare/rdbi-codegen-v0.1.1...rdbi-codegen-v0.2.0) (2026-02-07)
+
+
+### Features
+
+* add MySqlPool Clone and builder, update docs for codegen output and crates.io ([b1f452e](https://github.com/a4501150/rdbi/commit/b1f452e4cdcd38632a1571ac2a9eee70fb555ccd))
+
 ## [0.1.1](https://github.com/a4501150/rdbi/compare/rdbi-codegen-v0.1.0...rdbi-codegen-v0.1.1) (2026-02-07)
 
 
