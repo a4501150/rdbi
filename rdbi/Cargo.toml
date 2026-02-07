@@ -10,6 +10,11 @@ keywords.workspace = true
 categories.workspace = true
 description = "Database abstraction layer built on mysql_async with derive macros"
 
+[features]
+default = []
+native-tls = ["mysql_async/native-tls-tls"]
+rustls-tls = ["mysql_async/default-rustls"]
+
 [dependencies]
 rdbi-derive.workspace = true
 async-trait.workspace = true

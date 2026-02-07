@@ -17,7 +17,21 @@ Check the latest versions on crates.io: [rdbi](https://crates.io/crates/rdbi), [
 rdbi = "0.1"
 ```
 
-That's it for most users. If you want automatic code generation from SQL schemas, also add:
+That's it for most users. For **TLS connections** (required by most cloud database providers), enable a TLS feature:
+
+```toml
+[dependencies]
+rdbi = { version = "0.1", features = ["native-tls"] }
+# or
+rdbi = { version = "0.1", features = ["rustls-tls"] }
+```
+
+| Feature | Backend | Notes |
+|---------|---------|-------|
+| `native-tls` | OS native (OpenSSL/Secure Transport/SChannel) | Requires system libraries |
+| `rustls-tls` | Rustls (pure Rust) | No system dependencies |
+
+If you want automatic code generation from SQL schemas, also add:
 
 ```toml
 [build-dependencies]
