@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/a4501150/rdbi/compare/rdbi-codegen-v0.2.0...rdbi-codegen-v0.3.0) (2026-02-07)
+
+
+### Features
+
+* auto-derive models_module and dao_module from output directory paths ([efd3178](https://github.com/a4501150/rdbi/commit/efd3178c802caea6e3c4c1fa8e5a7c68d3c4daaa))
+
 ## [0.2.0](https://github.com/a4501150/rdbi/compare/rdbi-codegen-v0.1.1...rdbi-codegen-v0.2.0) (2026-02-07)
 
 
