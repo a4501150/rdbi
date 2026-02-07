@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/a4501150/rdbi/compare/rdbi-v0.2.0...rdbi-v0.2.1) (2026-02-07)
+
+
+### Bug Fixes
+
+* expose TLS features for mysql_async ([dd4ede1](https://github.com/a4501150/rdbi/commit/dd4ede121a8b78ea750925eae96f0c9b553ff9bf))
+
 ## [0.2.0](https://github.com/a4501150/rdbi/compare/rdbi-v0.1.1...rdbi-v0.2.0) (2026-02-07)
 
 
