@@ -1,7 +1,7 @@
 # rdbi
 
 [![CI](https://github.com/a4501150/rdbi/actions/workflows/ci.yml/badge.svg)](https://github.com/a4501150/rdbi/actions/workflows/ci.yml)
-[![rdbi on crates.io](https://img.shields.io/crates/v/rdbi.svg)](https://crates.io/crates/rdbi)
+[![rdbi](https://img.shields.io/crates/v/rdbi.svg?label=rdbi)](https://crates.io/crates/rdbi)
 [![rdbi-codegen on crates.io](https://img.shields.io/crates/v/rdbi-codegen.svg?label=rdbi-codegen)](https://crates.io/crates/rdbi-codegen)
 [![docs.rs](https://img.shields.io/docsrs/rdbi)](https://docs.rs/rdbi)
 [![License](https://img.shields.io/crates/l/rdbi.svg)](LICENSE)
