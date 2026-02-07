@@ -2124,7 +2124,7 @@ dependencies = [
 
 [[package]]
 name = "rdbi"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "chrono",
@@ -2139,7 +2139,7 @@ dependencies = [
 
 [[package]]
 name = "rdbi-codegen"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -2156,7 +2156,7 @@ dependencies = [
 
 [[package]]
 name = "rdbi-derive"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "proc-macro2",
  "quote",
