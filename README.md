@@ -10,6 +10,8 @@ A Rust database interface built on `mysql_async` with derive macros for easy row
 
 ## Installation
 
+Check the latest versions on crates.io: [rdbi](https://crates.io/crates/rdbi), [rdbi-codegen](https://crates.io/crates/rdbi-codegen)
+
 ```toml
 [dependencies]
 rdbi = "0.1"
