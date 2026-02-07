@@ -1,19 +1,14 @@
 //! Example showing how to use rdbi-codegen with build.rs
 //!
-//! The generated code is included from the OUT_DIR.
+//! Generated code is written to src/generated/ via Cargo.toml config.
+//! The generated files should be committed to version control.
 
-// Include generated models
-pub mod models {
-    include!(concat!(env!("OUT_DIR"), "/models/mod.rs"));
+mod generated {
+    pub mod models;
+    pub mod dao;
 }
 
-// Include generated DAOs
-pub mod dao {
-    include!(concat!(env!("OUT_DIR"), "/dao/mod.rs"));
-}
-
-// Re-export for convenience
-pub use models::*;
+pub use generated::models::*;
 
 fn main() {
     println!("rdbi-codegen build.rs example");

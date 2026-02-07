@@ -1,5 +1,7 @@
 //! MySQL connection pool implementation
 
+use std::time::Duration;
+
 use crate::error::{Error, Result};
 use crate::traits::{
     ExecuteResult, FromRow, FromValue, IsolationLevel, Pool, Transaction, Transactional,
@@ -17,6 +19,9 @@ use super::types::{from_mysql_value, to_mysql_value};
 ///
 /// This wraps `mysql_async::Pool` and implements the rdbi `Pool` trait.
 ///
+/// Cloning is cheap: the inner pool is `Arc`-backed, so all clones share the
+/// same underlying pool instance and connection set.
+///
 /// # Example
 ///
 /// ```ignore
@@ -29,6 +34,7 @@ use super::types::{from_mysql_value, to_mysql_value};
 ///     .fetch_all(&pool)
 ///     .await?;
 /// ```
+#[derive(Clone)]
 pub struct MySqlPool {
     inner: MysqlAsyncPool,
 }
@@ -58,6 +64,101 @@ impl MySqlPool {
     pub async fn disconnect(self) -> Result<()> {
         self.inner.disconnect().await?;
         Ok(())
+    }
+
+    /// Create a builder for configuring the pool.
+    ///
+    /// See [`MySqlPoolBuilder`] for available options.
+    pub fn builder(url: &str) -> MySqlPoolBuilder {
+        MySqlPoolBuilder::new(url)
+    }
+}
+
+/// Builder for configuring a [`MySqlPool`] with custom pool options.
+///
+/// # Example
+///
+/// ```ignore
+/// use rdbi::MySqlPoolBuilder;
+///
+/// let pool = MySqlPoolBuilder::new("mysql://user:pass@localhost/db")
+///     .pool_min(5)
+///     .pool_max(50)
+///     .build()?;
+/// ```
+pub struct MySqlPoolBuilder {
+    url: String,
+    pool_min: Option<usize>,
+    pool_max: Option<usize>,
+    inactive_connection_ttl: Option<Duration>,
+    abs_conn_ttl: Option<Duration>,
+}
+
+impl MySqlPoolBuilder {
+    /// Create a new builder with the given connection URL.
+    pub fn new(url: &str) -> Self {
+        Self {
+            url: url.to_string(),
+            pool_min: None,
+            pool_max: None,
+            inactive_connection_ttl: None,
+            abs_conn_ttl: None,
+        }
+    }
+
+    /// Set the minimum number of connections in the pool.
+    pub fn pool_min(mut self, min: usize) -> Self {
+        self.pool_min = Some(min);
+        self
+    }
+
+    /// Set the maximum number of connections in the pool.
+    pub fn pool_max(mut self, max: usize) -> Self {
+        self.pool_max = Some(max);
+        self
+    }
+
+    /// Set the TTL for inactive connections.
+    pub fn inactive_connection_ttl(mut self, ttl: Duration) -> Self {
+        self.inactive_connection_ttl = Some(ttl);
+        self
+    }
+
+    /// Set the absolute TTL for all connections.
+    pub fn abs_conn_ttl(mut self, ttl: Duration) -> Self {
+        self.abs_conn_ttl = Some(ttl);
+        self
+    }
+
+    /// Build the [`MySqlPool`] with the configured options.
+    pub fn build(self) -> Result<MySqlPool> {
+        let opts =
+            mysql_async::Opts::from_url(&self.url).map_err(|e| Error::Connection(e.to_string()))?;
+        let mut builder = mysql_async::OptsBuilder::from_opts(opts);
+
+        let mut pool_opts = mysql_async::PoolOpts::default();
+
+        if self.pool_min.is_some() || self.pool_max.is_some() {
+            let min = self.pool_min.unwrap_or(10);
+            let max = self.pool_max.unwrap_or(100);
+            if let Some(constraints) = mysql_async::PoolConstraints::new(min, max) {
+                pool_opts = pool_opts.with_constraints(constraints);
+            }
+        }
+
+        if let Some(ttl) = self.inactive_connection_ttl {
+            pool_opts = pool_opts.with_inactive_connection_ttl(ttl);
+        }
+
+        if let Some(ttl) = self.abs_conn_ttl {
+            pool_opts = pool_opts.with_abs_conn_ttl(Some(ttl));
+        }
+
+        builder = builder.pool_opts(pool_opts);
+
+        Ok(MySqlPool {
+            inner: MysqlAsyncPool::new(builder),
+        })
     }
 }
 

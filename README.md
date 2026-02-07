@@ -1,5 +1,11 @@
 # rdbi
 
+[![CI](https://github.com/a4501150/rdbi/actions/workflows/ci.yml/badge.svg)](https://github.com/a4501150/rdbi/actions/workflows/ci.yml)
+[![rdbi on crates.io](https://img.shields.io/crates/v/rdbi.svg)](https://crates.io/crates/rdbi)
+[![rdbi-codegen on crates.io](https://img.shields.io/crates/v/rdbi-codegen.svg?label=rdbi-codegen)](https://crates.io/crates/rdbi-codegen)
+[![docs.rs](https://img.shields.io/docsrs/rdbi)](https://docs.rs/rdbi)
+[![License](https://img.shields.io/crates/l/rdbi.svg)](LICENSE)
+
 A Rust database interface built on `mysql_async` with derive macros for easy row mapping.
 
 ## Installation
@@ -34,7 +40,7 @@ pub struct User {
 #[tokio::main]
 async fn main() -> rdbi::Result<()> {
     // Connect to database
-    let pool = MySqlPool::new("mysql://user:pass@localhost/mydb").await?;
+    let pool = MySqlPool::new("mysql://user:pass@localhost/mydb")?;
 
     // Query with type-safe binding
     let users: Vec<User> = Query::new("SELECT * FROM users WHERE id = ?")
@@ -65,6 +71,9 @@ CREATE TABLE users (
 ```toml
 [package.metadata.rdbi-codegen]
 schema_file = "schema.sql"
+output_structs_dir = "src/generated/models"
+output_dao_dir = "src/generated/dao"
+models_module = "generated::models"
 
 [dependencies]
 rdbi = "0.1"
@@ -83,23 +92,76 @@ fn main() {
 
 **4. Include generated code** (`src/main.rs`):
 ```rust
-mod models { include!(concat!(env!("OUT_DIR"), "/models/mod.rs")); }
-mod dao { include!(concat!(env!("OUT_DIR"), "/dao/mod.rs")); }
+mod generated {
+    pub mod models;
+    pub mod dao;
+}
 
-use models::*;
+use generated::models::*;
 use rdbi::mysql::MySqlPool;
 
 #[tokio::main]
 async fn main() -> rdbi::Result<()> {
-    let pool = MySqlPool::new("mysql://user:pass@localhost/mydb").await?;
+    let pool = MySqlPool::new("mysql://user:pass@localhost/mydb")?;
 
     // Use generated DAO methods
-    let user = dao::users::find_by_id(&pool, 1).await?;
-    let active = dao::users::find_by_status(&pool, UsersStatus::Active).await?;
+    let user = generated::dao::users::find_by_id(&pool, 1).await?;
+    let active = generated::dao::users::find_by_status(&pool, UsersStatus::Active).await?;
 
     Ok(())
 }
 ```
+
+> **Note:** The generated code under `src/generated/` should be committed to version control. This ensures IDE support works without building, and changes are reviewable in PRs. Run `cargo build` to regenerate after schema changes.
+
+<details>
+<summary>Alternative: OUT_DIR with include!()</summary>
+
+If you prefer not to commit generated code, omit the `output_*_dir` and `models_module` settings. The defaults write to `$OUT_DIR`, and you use `include!()`:
+
+```rust
+pub mod models {
+    include!(concat!(env!("OUT_DIR"), "/models/mod.rs"));
+}
+pub mod dao {
+    include!(concat!(env!("OUT_DIR"), "/dao/mod.rs"));
+}
+pub use models::*;
+```
+
+</details>
+
+## Connection Pool
+
+`MySqlPool` implements `Clone` — cloning is cheap (Arc-backed) and all clones share the same underlying connection pool. No need to wrap in `Arc`.
+
+```rust
+use rdbi::mysql::MySqlPool;
+
+// Default pool: min=10, max=100 connections
+let pool = MySqlPool::new("mysql://user:pass@localhost/mydb")?;
+
+// Custom pool size via builder
+let pool = MySqlPool::builder("mysql://user:pass@localhost/mydb")
+    .pool_min(5)
+    .pool_max(50)
+    .build()?;
+
+// Or via URL parameters
+let pool = MySqlPool::new("mysql://user:pass@localhost/mydb?pool_min=5&pool_max=50")?;
+
+// Clone is cheap — share across services
+let pool2 = pool.clone();
+```
+
+### Builder Options
+
+| Method | Default | Description |
+|--------|---------|-------------|
+| `pool_min(n)` | 10 | Minimum idle connections |
+| `pool_max(n)` | 100 | Maximum total connections |
+| `inactive_connection_ttl(d)` | 0s | TTL for idle connections above `pool_min` |
+| `abs_conn_ttl(d)` | None | Absolute TTL for any connection |
 
 ## Generated DAO Methods
 
@@ -297,8 +359,11 @@ For `build.rs` via `Cargo.toml`:
 ```toml
 [package.metadata.rdbi-codegen]
 schema_file = "schema.sql"
-include_tables = ["users", "orders"]  # Only these tables
-exclude_tables = ["migrations"]       # Skip these tables
+output_structs_dir = "src/generated/models"  # Default: $OUT_DIR/models
+output_dao_dir = "src/generated/dao"          # Default: $OUT_DIR/dao
+models_module = "generated::models"           # Default: "models"
+include_tables = ["users", "orders"]          # Only these tables
+exclude_tables = ["migrations"]               # Skip these tables
 generate_structs = true
 generate_dao = true
 ```

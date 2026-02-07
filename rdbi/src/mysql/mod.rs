@@ -5,6 +5,6 @@ mod row;
 mod transaction;
 mod types;
 
-pub use pool::MySqlPool;
+pub use pool::{MySqlPool, MySqlPoolBuilder};
 pub use row::MySqlRow;
 pub use transaction::MySqlTransaction;

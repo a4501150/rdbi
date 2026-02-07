@@ -55,6 +55,7 @@ rdbi-codegen      (independent, no runtime dep on rdbi)
 - **Unit tests**: `cargo test -p rdbi-codegen` (32 tests covering parser, codegen, naming, type resolution)
 - **Integration tests**: `cargo test -p rdbi-tests -- --test-threads=1` (35 tests, requires Docker for testcontainers/MySQL)
 - Integration tests use a shared MySQL container via `ctor` pattern with `serial_test` for sequential execution.
+- **Always run both unit tests and integration tests** after any code change to verify nothing is broken. Integration tests require Docker to be running.
 
 ## CI/CD
 

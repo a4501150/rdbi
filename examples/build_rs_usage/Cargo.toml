@@ -8,14 +8,13 @@ edition = "2021"
 
 [package.metadata.rdbi-codegen]
 schema_file = "schema.sql"
-# include_tables = ["users", "orders"]  # Optional: only generate for specific tables
-# exclude_tables = ["migrations"]       # Optional: exclude specific tables
-# output_structs_dir = "./src/generated/models"  # Optional: custom output path
-# output_dao_dir = "./src/generated/dao"         # Optional: custom output path
-# models_module = "models"              # Optional: module name for structs
-# dao_module = "dao"                    # Optional: module name for DAOs
-# generate_structs = true               # Optional: set to false to skip struct generation
-# generate_dao = true                   # Optional: set to false to skip DAO generation
+output_structs_dir = "src/generated/models"
+output_dao_dir = "src/generated/dao"
+models_module = "generated::models"
+# include_tables = ["users", "orders"]
+# exclude_tables = ["migrations"]
+# generate_structs = true
+# generate_dao = true
 
 [build-dependencies]
 rdbi-codegen = { path = "../../rdbi-codegen" }

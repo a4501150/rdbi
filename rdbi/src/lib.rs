@@ -44,7 +44,7 @@ pub use rdbi_derive::{FromRow, ToParams};
 // Re-export main types
 pub use batch::BatchInsert;
 pub use error::{Error, Result};
-pub use mysql::{MySqlPool, MySqlRow, MySqlTransaction};
+pub use mysql::{MySqlPool, MySqlPoolBuilder, MySqlRow, MySqlTransaction};
 pub use query::{DynamicQuery, Query};
 pub use traits::{
     ExecuteResult, FromRow, FromValue, IsolationLevel, Pool, Row, RowExt, ToParams, ToValue,

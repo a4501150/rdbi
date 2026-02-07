@@ -13,8 +13,9 @@
 //! ```toml
 //! [package.metadata.rdbi-codegen]
 //! schema_file = "schema.sql"
-//! include_tables = ["users", "orders"]
-//! exclude_tables = ["migrations"]
+//! output_structs_dir = "src/generated/models"
+//! output_dao_dir = "src/generated/dao"
+//! models_module = "generated::models"
 //! ```
 //!
 //! Then use a minimal `build.rs`:
@@ -26,17 +27,23 @@
 //! }
 //! ```
 //!
+//! Include the generated code in your crate root (`src/main.rs` or `src/lib.rs`):
+//!
+//! ```rust,ignore
+//! mod generated {
+//!     pub mod models;
+//!     pub mod dao;
+//! }
+//! ```
+//!
 //! # Alternative: Programmatic Configuration
 //!
 //! ```rust,ignore
-//! use std::env;
 //! use std::path::PathBuf;
 //!
 //! fn main() {
-//!     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
-//!
 //!     rdbi_codegen::CodegenBuilder::new("schema.sql")
-//!         .output_dir(&out_dir)
+//!         .output_dir(PathBuf::from("src/generated"))
 //!         .generate()
 //!         .expect("Failed to generate rdbi code");
 //!
@@ -47,7 +54,7 @@
 //! # CLI Usage
 //!
 //! ```bash
-//! rdbi-codegen --schema schema.sql --output ./generated
+//! rdbi-codegen --schema schema.sql --output ./src/generated generate
 //! ```
 
 pub mod codegen;
