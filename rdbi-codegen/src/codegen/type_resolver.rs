@@ -110,6 +110,18 @@ impl RustType {
     pub fn is_optional(&self) -> bool {
         matches!(self, RustType::Option(_))
     }
+
+    /// Check if this type implements Copy
+    ///
+    /// Only String, Bytes (Vec<u8>), and Json (serde_json::Value) are non-Copy.
+    /// All other types (primitives, enums, chrono dates, Decimal) implement Copy.
+    pub fn is_copy(&self) -> bool {
+        match self {
+            RustType::String | RustType::Bytes | RustType::Json => false,
+            RustType::Option(inner) => inner.is_copy(),
+            _ => true,
+        }
+    }
 }
 
 /// Resolve MySQL data types to Rust types

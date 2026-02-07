@@ -376,7 +376,12 @@ fn generate_insert_methods(
         .iter()
         .map(|c| {
             let field = escape_field_name(&c.name);
-            format!("        .bind(&entity.{})", field)
+            let rust_type = TypeResolver::resolve(c, &table.name);
+            if rust_type.is_copy() {
+                format!("        .bind(entity.{})", field)
+            } else {
+                format!("        .bind(&entity.{})", field)
+            }
         })
         .collect::<Vec<_>>()
         .join("\n");
@@ -438,6 +443,7 @@ fn generate_insert_plain_method(
 
     format!(
         r#"/// Insert a new record with individual parameters
+#[allow(clippy::too_many_arguments)]
 pub async fn insert_plain<P: Pool>(pool: &P, {params}) -> Result<u64> {{
     Query::new("INSERT INTO `{table_name}` ({column_list}) VALUES ({placeholders})")
 {bind_section}
@@ -547,7 +553,12 @@ fn generate_upsert_method(table: &TableMetadata, struct_name: &str) -> String {
         .iter()
         .map(|c| {
             let field = escape_field_name(&c.name);
-            format!("        .bind(&entity.{})", field)
+            let rust_type = TypeResolver::resolve(c, &table.name);
+            if rust_type.is_copy() {
+                format!("        .bind(entity.{})", field)
+            } else {
+                format!("        .bind(&entity.{})", field)
+            }
         })
         .collect::<Vec<_>>()
         .join("\n");
@@ -578,7 +589,7 @@ pub async fn upsert<P: Pool>(pool: &P, entity: &{struct_name}) -> Result<u64> {{
 fn generate_update_methods(
     table: &TableMetadata,
     struct_name: &str,
-    _column_map: &HashMap<&str, &ColumnMetadata>,
+    column_map: &HashMap<&str, &ColumnMetadata>,
 ) -> String {
     let mut code = String::new();
 
@@ -608,11 +619,22 @@ fn generate_update_methods(
         .iter()
         .map(|c| {
             let field = escape_field_name(&c.name);
-            format!("        .bind(&entity.{})", field)
+            let rust_type = TypeResolver::resolve(c, &table.name);
+            if rust_type.is_copy() {
+                format!("        .bind(entity.{})", field)
+            } else {
+                format!("        .bind(&entity.{})", field)
+            }
         })
         .chain(pk.columns.iter().map(|c| {
             let field = escape_field_name(c);
-            format!("        .bind(&entity.{})", field)
+            let col = column_map.get(c.as_str()).unwrap();
+            let rust_type = TypeResolver::resolve(col, &table.name);
+            if rust_type.is_copy() {
+                format!("        .bind(entity.{})", field)
+            } else {
+                format!("        .bind(&entity.{})", field)
+            }
         }))
         .collect();
 
@@ -679,6 +701,7 @@ fn generate_update_plain_method(
 
     format!(
         r#"/// Update a record by primary key with individual parameters
+#[allow(clippy::too_many_arguments)]
 pub async fn {method_name}<P: Pool>(pool: &P, {all_params}) -> Result<u64> {{
     Query::new("UPDATE `{table_name}` SET {set_clause} WHERE {where_clause}")
 {bind_section_update}
