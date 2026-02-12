@@ -2271,7 +2271,7 @@ dependencies = [
 
 [[package]]
 name = "rdbi"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "async-trait",
  "chrono",
@@ -2286,7 +2286,7 @@ dependencies = [
 
 [[package]]
 name = "rdbi-codegen"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "clap",

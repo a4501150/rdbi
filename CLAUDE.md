@@ -60,7 +60,7 @@ rdbi-codegen      (independent, no runtime dep on rdbi)
 ## CI/CD
 
 - Single workflow in @.github/workflows/ci.yml handles CI and release.
-- CI jobs (check, clippy, fmt, test, integration) run on every push/PR to `main`.
+- **Lint** job (fmt check + clippy) runs on every push/PR to `main`. Test and integration jobs depend on lint (`needs: [lint]`).
 - Release-please and publish jobs run only on push to `main`, after all CI jobs pass.
 - Publish order: `rdbi-derive` → `rdbi-codegen` → `rdbi` with 30s waits for crates.io index propagation.
 - Pre-commit hook: @.githooks/pre-commit — run `git config core.hooksPath .githooks` to enable.
