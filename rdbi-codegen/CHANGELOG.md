@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.2](https://github.com/a4501150/rdbi/compare/rdbi-codegen-v0.3.1...rdbi-codegen-v0.3.2) (2026-02-25)
+
+
+### Bug Fixes
+
+* run rustfmt on generated files ([b5b3acb](https://github.com/a4501150/rdbi/commit/b5b3acbadf00932b03443150cc120a53c4cd5434))
+
 ## [0.3.1](https://github.com/a4501150/rdbi/compare/rdbi-codegen-v0.3.0...rdbi-codegen-v0.3.1) (2026-02-07)
 
 
