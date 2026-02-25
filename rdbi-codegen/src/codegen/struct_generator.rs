@@ -31,7 +31,9 @@ pub fn generate_structs(tables: &[TableMetadata], config: &CodegenConfig) -> Res
     mod_content.push('\n');
     mod_content.push_str(&generate_shared_pagination_types());
 
-    fs::write(output_dir.join("mod.rs"), mod_content)?;
+    let mod_path = output_dir.join("mod.rs");
+    fs::write(&mod_path, mod_content)?;
+    super::format_file(&mod_path);
 
     // Generate each struct file
     for table in tables {
@@ -191,7 +193,9 @@ fn generate_struct_file(table: &TableMetadata, output_dir: &Path) -> Result<()> 
     code.push('\n');
     code.push_str(&generate_sort_by_enum(table));
 
-    fs::write(output_dir.join(&file_name), code)?;
+    let file_path = output_dir.join(&file_name);
+    fs::write(&file_path, code)?;
+    super::format_file(&file_path);
     Ok(())
 }
 

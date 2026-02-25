@@ -58,7 +58,9 @@ pub fn generate_daos(tables: &[TableMetadata], config: &CodegenConfig) -> Result
         mod_content.push_str(&format!("pub mod {};\n", file_name));
     }
 
-    fs::write(output_dir.join("mod.rs"), mod_content)?;
+    let mod_path = output_dir.join("mod.rs");
+    fs::write(&mod_path, mod_content)?;
+    super::format_file(&mod_path);
 
     // Generate each DAO file
     for table in tables {
@@ -201,7 +203,9 @@ fn generate_dao_file(table: &TableMetadata, output_dir: &Path, models_module: &s
         models_module,
     ));
 
-    fs::write(output_dir.join(&file_name), code)?;
+    let file_path = output_dir.join(&file_name);
+    fs::write(&file_path, code)?;
+    super::format_file(&file_path);
     Ok(())
 }
 
