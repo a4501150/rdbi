@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.3](https://github.com/a4501150/rdbi/compare/rdbi-codegen-v0.3.2...rdbi-codegen-v0.3.3) (2026-02-26)
+
+
+### Bug Fixes
+
+* use prettyplease for in-process formatting instead of shelling out to rustfmt ([7af8527](https://github.com/a4501150/rdbi/commit/7af8527a479a44f6a79d666034806f9a01d2891a))
+
 ## [0.3.2](https://github.com/a4501150/rdbi/compare/rdbi-codegen-v0.3.1...rdbi-codegen-v0.3.2) (2026-02-25)
 
 
