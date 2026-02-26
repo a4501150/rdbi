@@ -35,6 +35,8 @@ clap = { version = "4.0", features = ["derive"], optional = true }
 
 # Code generation utilities
 heck = "0.5"
+syn = { version = "2.0", features = ["full", "parsing"] }
+prettyplease = "0.2"
 
 # Logging
 tracing.workspace = true
