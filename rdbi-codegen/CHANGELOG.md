@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.4](https://github.com/a4501150/rdbi/compare/rdbi-codegen-v0.3.3...rdbi-codegen-v0.3.4) (2026-02-26)
+
+
+### Bug Fixes
+
+* remove formatting from codegen, let project pre-commit hooks handle it ([4ad41ee](https://github.com/a4501150/rdbi/commit/4ad41ee510487bfcd55b105489d7eebfb04855b5))
+
 ## [0.3.3](https://github.com/a4501150/rdbi/compare/rdbi-codegen-v0.3.2...rdbi-codegen-v0.3.3) (2026-02-26)
 
 
