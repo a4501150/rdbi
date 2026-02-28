@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.5](https://github.com/a4501150/rdbi/compare/rdbi-codegen-v0.3.4...rdbi-codegen-v0.3.5) (2026-02-27)
+
+
+### Bug Fixes
+
+* generate parent mod.rs when both output dirs share a common parent ([4baa86e](https://github.com/a4501150/rdbi/commit/4baa86e2ac52b4c983ba64410faf746cdad079d8))
+
 ## [0.3.4](https://github.com/a4501150/rdbi/compare/rdbi-codegen-v0.3.3...rdbi-codegen-v0.3.4) (2026-02-26)
 
 
