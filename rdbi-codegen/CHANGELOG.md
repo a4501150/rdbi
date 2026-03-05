@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.6](https://github.com/a4501150/rdbi/compare/rdbi-codegen-v0.3.5...rdbi-codegen-v0.3.6) (2026-03-05)
+
+
+### Bug Fixes
+
+* add #![allow(dead_code)] to generated parent mod.rs ([9287af9](https://github.com/a4501150/rdbi/commit/9287af9a2c4814e9d01386aebb5a6b744bfe77ab))
+
 ## [0.3.5](https://github.com/a4501150/rdbi/compare/rdbi-codegen-v0.3.4...rdbi-codegen-v0.3.5) (2026-02-27)
 
 
