@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.7](https://github.com/a4501150/rdbi/compare/rdbi-codegen-v0.3.6...rdbi-codegen-v0.3.7) (2026-03-20)
+
+
+### Bug Fixes
+
+* add #[allow(dead_code, clippy::all)] to generated mod.rs files ([3a3f0bf](https://github.com/a4501150/rdbi/commit/3a3f0bfb90965ff2d1ac7610d6a6695e9537a390))
+
 ## [0.3.6](https://github.com/a4501150/rdbi/compare/rdbi-codegen-v0.3.5...rdbi-codegen-v0.3.6) (2026-03-05)
 
 
