@@ -109,11 +109,11 @@ pub async fn update_by_id<P: Pool>(pool: &P, id: i64, username: &str, email: &st
         .map(|r| r.rows_affected)
 }
 
-/// Find by non unique index: returns Vec (non-unique)
-pub async fn find_by_status<P: Pool>(pool: &P, status: UsersStatus) -> Result<Vec<Users>> {
-    Query::new("SELECT `id`, `username`, `email`, `status`, `created_at` FROM `users` WHERE `status` = ?")
-        .bind(status)
-        .fetch_all(pool)
+/// Find by unique index: returns Option (unique)
+pub async fn find_by_username<P: Pool>(pool: &P, username: &str) -> Result<Option<Users>> {
+    Query::new("SELECT `id`, `username`, `email`, `status`, `created_at` FROM `users` WHERE `username` = ?")
+        .bind(username)
+        .fetch_optional(pool)
         .await
 }
 
@@ -125,11 +125,11 @@ pub async fn find_by_email<P: Pool>(pool: &P, email: &str) -> Result<Vec<Users>>
         .await
 }
 
-/// Find by unique index: returns Option (unique)
-pub async fn find_by_username<P: Pool>(pool: &P, username: &str) -> Result<Option<Users>> {
-    Query::new("SELECT `id`, `username`, `email`, `status`, `created_at` FROM `users` WHERE `username` = ?")
-        .bind(username)
-        .fetch_optional(pool)
+/// Find by non unique index: returns Vec (non-unique)
+pub async fn find_by_status<P: Pool>(pool: &P, status: UsersStatus) -> Result<Vec<Users>> {
+    Query::new("SELECT `id`, `username`, `email`, `status`, `created_at` FROM `users` WHERE `status` = ?")
+        .bind(status)
+        .fetch_all(pool)
         .await
 }
 

@@ -55,7 +55,10 @@ pub fn generate_daos(tables: &[TableMetadata], config: &CodegenConfig) -> Result
 
     for table in tables {
         let file_name = heck::AsSnakeCase(&table.name).to_string();
-        mod_content.push_str(&format!("pub mod {};\n", file_name));
+        mod_content.push_str(&format!(
+            "#[allow(dead_code, clippy::all)]\npub mod {};\n",
+            file_name
+        ));
     }
 
     let mod_path = output_dir.join("mod.rs");

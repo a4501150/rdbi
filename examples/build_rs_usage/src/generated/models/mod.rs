@@ -1,7 +1,9 @@
 // Generated model structs
 
+#[allow(dead_code, clippy::all)]
 mod users;
 pub use users::*;
+#[allow(dead_code, clippy::all)]
 mod posts;
 pub use posts::*;
 

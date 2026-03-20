@@ -23,8 +23,10 @@ pub fn generate_structs(tables: &[TableMetadata], config: &CodegenConfig) -> Res
 
     for table in tables {
         let file_name = heck::AsSnakeCase(&table.name).to_string();
-        mod_content.push_str(&format!("mod {};\n", file_name));
-        mod_content.push_str(&format!("pub use {}::*;\n", file_name));
+        mod_content.push_str(&format!(
+            "#[allow(dead_code, clippy::all)]\nmod {};\npub use {}::*;\n",
+            file_name, file_name
+        ));
     }
 
     // Add shared pagination types
