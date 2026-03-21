@@ -29,12 +29,11 @@ pub fn generate_structs(tables: &[TableMetadata], config: &CodegenConfig) -> Res
         ));
     }
 
-    // Add shared pagination types
     mod_content.push('\n');
     mod_content.push_str(&generate_shared_pagination_types());
 
     let mod_path = output_dir.join("mod.rs");
-    fs::write(&mod_path, mod_content)?;
+    fs::write(&mod_path, &mod_content)?;
 
     // Generate each struct file
     for table in tables {
@@ -48,49 +47,31 @@ pub fn generate_structs(tables: &[TableMetadata], config: &CodegenConfig) -> Res
 fn generate_shared_pagination_types() -> String {
     r#"/// Sort direction for pagination
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SortDirection {
-    Asc,
-    Desc,
-}
+pub enum SortDirection { Asc, Desc }
 
 impl SortDirection {
-    pub fn as_sql(&self) -> &'static str {
-        match self {
-            Self::Asc => "ASC",
-            Self::Desc => "DESC",
-        }
-    }
+pub fn as_sql(&self) -> &'static str {
+match self { Self::Asc => "ASC", Self::Desc => "DESC" }
+}
 }
 
 /// Paginated result container
 #[derive(Debug, Clone)]
 pub struct PaginatedResult<T> {
-    pub items: Vec<T>,
-    pub total_count: i64,
-    pub current_page: i32,
-    pub total_pages: i32,
-    pub page_size: i32,
-    pub has_next: bool,
+pub items: Vec<T>,
+pub total_count: i64,
+pub current_page: i32,
+pub total_pages: i32,
+pub page_size: i32,
+pub has_next: bool,
 }
 
 impl<T> PaginatedResult<T> {
-    pub fn new(
-        items: Vec<T>,
-        total_count: i64,
-        current_page: i32,
-        page_size: i32,
-    ) -> Self {
-        let total_pages = ((total_count as f64) / (page_size as f64)).ceil() as i32;
-        let has_next = current_page < total_pages;
-        Self {
-            items,
-            total_count,
-            current_page,
-            total_pages,
-            page_size,
-            has_next,
-        }
-    }
+pub fn new(items: Vec<T>, total_count: i64, current_page: i32, page_size: i32) -> Self {
+let total_pages = ((total_count as f64) / (page_size as f64)).ceil() as i32;
+let has_next = current_page < total_pages;
+Self { items, total_count, current_page, total_pages, page_size, has_next }
+}
 }
 "#
     .to_string()
@@ -114,7 +95,6 @@ fn generate_struct_file(table: &TableMetadata, output_dir: &Path) -> Result<()> 
 
     // Generate imports (serde and rdbi)
     code.push_str("use serde::{Deserialize, Serialize};\n");
-
     code.push('\n');
 
     // Generate enum types first
@@ -133,7 +113,7 @@ fn generate_struct_file(table: &TableMetadata, output_dir: &Path) -> Result<()> 
         }
     }
 
-    // Generate struct with derives (rdbi::FromRow and rdbi::ToParams)
+    // Generate struct with derives
     code.push_str("#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, rdbi::FromRow, rdbi::ToParams)]\n");
     code.push_str(&format!("pub struct {} {{\n", struct_name));
 
@@ -143,14 +123,11 @@ fn generate_struct_file(table: &TableMetadata, output_dir: &Path) -> Result<()> 
         let rust_type = TypeResolver::resolve(col, &table.name);
 
         // Add field documentation
-        code.push_str(&format!("    /// Column: `{}`", col.name));
-
-        // Add index info
+        code.push_str(&format!("/// Column: `{}`", col.name));
         let index_info = get_index_info(table, &col.name);
         if !index_info.is_empty() {
             code.push_str(&format!(" ({})", index_info.join(", ")));
         }
-
         if let Some(comment) = &col.comment {
             if !comment.is_empty() {
                 code.push_str(&format!(" - {}", comment));
@@ -160,42 +137,34 @@ fn generate_struct_file(table: &TableMetadata, output_dir: &Path) -> Result<()> 
 
         // Add rdbi attributes
         let mut attrs = Vec::new();
-
-        // Add rename attribute if field name differs from column name
         if field_name != col.name {
             attrs.push(format!("rename = \"{}\"", col.name));
         }
-
-        // Add skip_insert for auto-increment columns
         if col.is_auto_increment {
             attrs.push("skip_insert".to_string());
         }
-
         if !attrs.is_empty() {
-            code.push_str(&format!("    #[rdbi({})]\n", attrs.join(", ")));
+            code.push_str(&format!("#[rdbi({})]\n", attrs.join(", ")));
         }
 
-        // Add serde rename attribute if field name differs from column name
-        // This is especially important for raw identifiers (r#type -> "type")
+        // Add serde rename for raw identifiers (r#type -> "type")
         if field_name != col.name {
-            code.push_str(&format!("    #[serde(rename = \"{}\")]\n", col.name));
+            code.push_str(&format!("#[serde(rename = \"{}\")]\n", col.name));
         }
 
         code.push_str(&format!(
-            "    pub {}: {},\n",
+            "pub {}: {},\n",
             field_name,
             rust_type.to_type_string()
         ));
     }
 
     code.push_str("}\n");
-
-    // Generate SortBy enum for pagination
     code.push('\n');
     code.push_str(&generate_sort_by_enum(table));
 
     let file_path = output_dir.join(&file_name);
-    fs::write(&file_path, code)?;
+    fs::write(&file_path, &code)?;
     Ok(())
 }
 
@@ -209,30 +178,20 @@ fn generate_sort_by_enum(table: &TableMetadata) -> String {
     code.push_str(&format!("/// Sort columns for `{}`\n", table.name));
     code.push_str("#[derive(Debug, Clone, Copy, PartialEq, Eq)]\n");
     code.push_str(&format!("pub enum {} {{\n", enum_name));
-
     for col in &table.columns {
         let variant = heck::AsPascalCase(&col.name).to_string();
-        code.push_str(&format!("    {},\n", variant));
+        code.push_str(&format!("{},\n", variant));
     }
-
     code.push_str("}\n\n");
 
-    // Generate as_sql impl
     code.push_str(&format!("impl {} {{\n", enum_name));
-    code.push_str("    pub fn as_sql(&self) -> &'static str {\n");
-    code.push_str("        match self {\n");
-
+    code.push_str("pub fn as_sql(&self) -> &'static str {\n");
+    code.push_str("match self {\n");
     for col in &table.columns {
         let variant = heck::AsPascalCase(&col.name).to_string();
-        code.push_str(&format!(
-            "            Self::{} => \"`{}`\",\n",
-            variant, col.name
-        ));
+        code.push_str(&format!("Self::{} => \"`{}`\",\n", variant, col.name));
     }
-
-    code.push_str("        }\n");
-    code.push_str("    }\n");
-    code.push_str("}\n");
+    code.push_str("}\n}\n}\n");
 
     code
 }
@@ -242,21 +201,15 @@ fn generate_enum(table_name: &str, column: &ColumnMetadata, values: &[String]) -
     let enum_name = to_enum_name(table_name, &column.name);
     let mut code = String::new();
 
-    // Add documentation
     code.push_str(&format!("/// Enum for `{}.{}`\n", table_name, column.name));
-
-    // Generate enum with derives (for rdbi, we need to implement FromValue and ToValue)
     code.push_str("#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]\n");
     code.push_str(&format!("pub enum {} {{\n", enum_name));
 
-    // Track used variant names to avoid duplicates
     let mut used_variants: HashSet<String> = HashSet::new();
     let mut variant_mappings: Vec<(String, String)> = Vec::new();
 
     for value in values {
         let variant = to_enum_variant(value);
-
-        // Handle duplicate variants (shouldn't happen but be safe)
         let final_variant = if used_variants.contains(&variant) {
             let mut counter = 2;
             loop {
@@ -269,60 +222,48 @@ fn generate_enum(table_name: &str, column: &ColumnMetadata, values: &[String]) -
         } else {
             variant
         };
-
         used_variants.insert(final_variant.clone());
 
-        // Clean the value (remove quotes)
         let clean_value = value.trim_matches('\'').trim_matches('"');
-
-        // Add serde rename attribute if variant differs from original value
         if final_variant != clean_value {
-            code.push_str(&format!("    #[serde(rename = \"{}\")]\n", clean_value));
+            code.push_str(&format!("#[serde(rename = \"{}\")]\n", clean_value));
         }
-
-        code.push_str(&format!("    {},\n", final_variant));
+        code.push_str(&format!("{},\n", final_variant));
         variant_mappings.push((final_variant, clean_value.to_string()));
     }
 
     code.push_str("}\n\n");
 
-    // Generate FromValue implementation for rdbi
+    // FromValue implementation
     code.push_str(&format!("impl rdbi::FromValue for {} {{\n", enum_name));
-    code.push_str("    fn from_value(value: rdbi::Value) -> rdbi::Result<Self> {\n");
-    code.push_str("        match value {\n");
-    code.push_str("            rdbi::Value::String(s) => match s.as_str() {\n");
+    code.push_str("fn from_value(value: rdbi::Value) -> rdbi::Result<Self> {\n");
+    code.push_str("match value {\n");
+    code.push_str("rdbi::Value::String(s) => match s.as_str() {\n");
     for (variant, db_value) in &variant_mappings {
-        code.push_str(&format!(
-            "                \"{}\" => Ok(Self::{}),\n",
-            db_value, variant
-        ));
+        code.push_str(&format!("\"{}\" => Ok(Self::{}),\n", db_value, variant));
     }
     code.push_str(&format!(
-        "                _ => Err(rdbi::Error::TypeConversion {{ expected: \"{}\", actual: s }}),\n",
+        "_ => Err(rdbi::Error::TypeConversion {{ expected: \"{}\", actual: s }}),\n",
         enum_name
     ));
-    code.push_str("            },\n");
+    code.push_str("},\n");
     code.push_str(&format!(
-        "            _ => Err(rdbi::Error::TypeConversion {{ expected: \"{}\", actual: value.type_name().to_string() }}),\n",
+        "_ => Err(rdbi::Error::TypeConversion {{ expected: \"{}\", actual: value.type_name().to_string() }}),\n",
         enum_name
     ));
-    code.push_str("        }\n");
-    code.push_str("    }\n");
-    code.push_str("}\n\n");
+    code.push_str("}\n}\n}\n\n");
 
-    // Generate ToValue implementation for rdbi
+    // ToValue implementation
     code.push_str(&format!("impl rdbi::ToValue for {} {{\n", enum_name));
-    code.push_str("    fn to_value(&self) -> rdbi::Value {\n");
-    code.push_str("        rdbi::Value::String(match self {\n");
+    code.push_str("fn to_value(&self) -> rdbi::Value {\n");
+    code.push_str("rdbi::Value::String(match self {\n");
     for (variant, db_value) in &variant_mappings {
         code.push_str(&format!(
-            "            Self::{} => \"{}\".to_string(),\n",
+            "Self::{} => \"{}\".to_string(),\n",
             variant, db_value
         ));
     }
-    code.push_str("        })\n");
-    code.push_str("    }\n");
-    code.push_str("}\n");
+    code.push_str("})\n}\n}\n");
 
     code
 }

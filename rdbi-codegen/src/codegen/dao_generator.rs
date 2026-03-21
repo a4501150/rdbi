@@ -62,7 +62,7 @@ pub fn generate_daos(tables: &[TableMetadata], config: &CodegenConfig) -> Result
     }
 
     let mod_path = output_dir.join("mod.rs");
-    fs::write(&mod_path, mod_content)?;
+    fs::write(&mod_path, &mod_content)?;
 
     // Generate each DAO file
     for table in tables {
@@ -206,7 +206,7 @@ fn generate_dao_file(table: &TableMetadata, output_dir: &Path, models_module: &s
     ));
 
     let file_path = output_dir.join(&file_name);
-    fs::write(&file_path, code)?;
+    fs::write(&file_path, &code)?;
     Ok(())
 }
 
@@ -251,7 +251,7 @@ fn build_params(
 fn generate_bind_section(columns: &[String]) -> String {
     columns
         .iter()
-        .map(|c| format!("        .bind({})", escape_field_name(c)))
+        .map(|c| format!(".bind({})", escape_field_name(c)))
         .collect::<Vec<_>>()
         .join("\n")
 }
@@ -261,11 +261,9 @@ fn generate_find_all(table: &TableMetadata, struct_name: &str, select_columns: &
     format!(
         r#"/// Find all records
 pub async fn find_all<P: Pool>(pool: &P) -> Result<Vec<{struct_name}>> {{
-    Query::new("SELECT {select_columns} FROM `{table_name}`")
-        .fetch_all(pool)
-        .await
+Query::new("SELECT {select_columns} FROM `{table_name}`")
+.fetch_all(pool).await
 }}
-
 "#,
         struct_name = struct_name,
         select_columns = select_columns,
@@ -278,11 +276,9 @@ fn generate_count_all(table: &TableMetadata) -> String {
     format!(
         r#"/// Count all records
 pub async fn count_all<P: Pool>(pool: &P) -> Result<i64> {{
-    Query::new("SELECT COUNT(*) FROM `{table_name}`")
-        .fetch_scalar(pool)
-        .await
+Query::new("SELECT COUNT(*) FROM `{table_name}`")
+.fetch_scalar(pool).await
 }}
-
 "#,
         table_name = table.name,
     )
@@ -307,12 +303,10 @@ fn generate_pk_methods(
     code.push_str(&format!(
         r#"/// Find by primary key
 pub async fn {method_name}<P: Pool>(pool: &P, {params}) -> Result<Option<{struct_name}>> {{
-    Query::new("SELECT {select_columns} FROM `{table_name}` WHERE {where_clause}")
+Query::new("SELECT {select_columns} FROM `{table_name}` WHERE {where_clause}")
 {bind_section}
-        .fetch_optional(pool)
-        .await
+.fetch_optional(pool).await
 }}
-
 "#,
         method_name = method_name,
         params = params,
@@ -328,13 +322,10 @@ pub async fn {method_name}<P: Pool>(pool: &P, {params}) -> Result<Option<{struct
     code.push_str(&format!(
         r#"/// Delete by primary key
 pub async fn {delete_method}<P: Pool>(pool: &P, {params}) -> Result<u64> {{
-    Query::new("DELETE FROM `{table_name}` WHERE {where_clause}")
+Query::new("DELETE FROM `{table_name}` WHERE {where_clause}")
 {bind_section}
-        .execute(pool)
-        .await
-        .map(|r| r.rows_affected)
+.execute(pool).await.map(|r| r.rows_affected)
 }}
-
 "#,
         delete_method = delete_method,
         params = params,
@@ -383,9 +374,9 @@ fn generate_insert_methods(
             let field = escape_field_name(&c.name);
             let rust_type = TypeResolver::resolve(c, &table.name);
             if rust_type.is_copy() {
-                format!("        .bind(entity.{})", field)
+                format!(".bind(entity.{})", field)
             } else {
-                format!("        .bind(&entity.{})", field)
+                format!(".bind(&entity.{})", field)
             }
         })
         .collect::<Vec<_>>()
@@ -395,13 +386,10 @@ fn generate_insert_methods(
     code.push_str(&format!(
         r#"/// Insert a new record
 pub async fn insert<P: Pool>(pool: &P, entity: &{struct_name}) -> Result<u64> {{
-    Query::new("INSERT INTO `{table_name}` ({column_list}) VALUES ({placeholders})")
+Query::new("INSERT INTO `{table_name}` ({column_list}) VALUES ({placeholders})")
 {bind_fields}
-        .execute(pool)
-        .await
-        .map(|r| r.last_insert_id.unwrap_or(0))
+.execute(pool).await.map(|r| r.last_insert_id.unwrap_or(0))
 }}
-
 "#,
         struct_name = struct_name,
         table_name = table.name,
@@ -450,13 +438,10 @@ fn generate_insert_plain_method(
         r#"/// Insert a new record with individual parameters
 #[allow(clippy::too_many_arguments)]
 pub async fn insert_plain<P: Pool>(pool: &P, {params}) -> Result<u64> {{
-    Query::new("INSERT INTO `{table_name}` ({column_list}) VALUES ({placeholders})")
+Query::new("INSERT INTO `{table_name}` ({column_list}) VALUES ({placeholders})")
 {bind_section}
-        .execute(pool)
-        .await
-        .map(|r| r.last_insert_id.unwrap_or(0))
+.execute(pool).await.map(|r| r.last_insert_id.unwrap_or(0))
 }}
-
 "#,
         params = params,
         table_name = table.name,
@@ -482,12 +467,9 @@ fn generate_insert_all_method(table: &TableMetadata, struct_name: &str) -> Strin
     format!(
         r#"/// Insert multiple records in a single batch
 pub async fn insert_all<P: Pool>(pool: &P, entities: &[{struct_name}]) -> Result<u64> {{
-    rdbi::BatchInsert::new("{table_name}", entities)
-        .execute(pool)
-        .await
-        .map(|r| r.rows_affected)
+rdbi::BatchInsert::new("{table_name}", entities)
+.execute(pool).await.map(|r| r.rows_affected)
 }}
-
 "#,
         struct_name = struct_name,
         table_name = table.name,
@@ -560,9 +542,9 @@ fn generate_upsert_method(table: &TableMetadata, struct_name: &str) -> String {
             let field = escape_field_name(&c.name);
             let rust_type = TypeResolver::resolve(c, &table.name);
             if rust_type.is_copy() {
-                format!("        .bind(entity.{})", field)
+                format!(".bind(entity.{})", field)
             } else {
-                format!("        .bind(&entity.{})", field)
+                format!(".bind(&entity.{})", field)
             }
         })
         .collect::<Vec<_>>()
@@ -572,14 +554,10 @@ fn generate_upsert_method(table: &TableMetadata, struct_name: &str) -> String {
         r#"/// Upsert a record (insert or update on duplicate key)
 /// Returns rows_affected: 1 if inserted, 2 if updated
 pub async fn upsert<P: Pool>(pool: &P, entity: &{struct_name}) -> Result<u64> {{
-    Query::new("INSERT INTO `{table_name}` ({column_list}) VALUES ({placeholders}) \
-         ON DUPLICATE KEY UPDATE {update_clause}")
+Query::new("INSERT INTO `{table_name}` ({column_list}) VALUES ({placeholders}) ON DUPLICATE KEY UPDATE {update_clause}")
 {bind_fields}
-        .execute(pool)
-        .await
-        .map(|r| r.rows_affected)
+.execute(pool).await.map(|r| r.rows_affected)
 }}
-
 "#,
         struct_name = struct_name,
         table_name = table.name,
@@ -626,9 +604,9 @@ fn generate_update_methods(
             let field = escape_field_name(&c.name);
             let rust_type = TypeResolver::resolve(c, &table.name);
             if rust_type.is_copy() {
-                format!("        .bind(entity.{})", field)
+                format!(".bind(entity.{})", field)
             } else {
-                format!("        .bind(&entity.{})", field)
+                format!(".bind(&entity.{})", field)
             }
         })
         .chain(pk.columns.iter().map(|c| {
@@ -636,24 +614,20 @@ fn generate_update_methods(
             let col = column_map.get(c.as_str()).unwrap();
             let rust_type = TypeResolver::resolve(col, &table.name);
             if rust_type.is_copy() {
-                format!("        .bind(entity.{})", field)
+                format!(".bind(entity.{})", field)
             } else {
-                format!("        .bind(&entity.{})", field)
+                format!(".bind(&entity.{})", field)
             }
         }))
         .collect();
 
-    // update_by_bean (using entity)
     code.push_str(&format!(
         r#"/// Update a record by primary key
 pub async fn update<P: Pool>(pool: &P, entity: &{struct_name}) -> Result<u64> {{
-    Query::new("UPDATE `{table_name}` SET {set_clause} WHERE {where_clause}")
+Query::new("UPDATE `{table_name}` SET {set_clause} WHERE {where_clause}")
 {bind_fields}
-        .execute(pool)
-        .await
-        .map(|r| r.rows_affected)
+.execute(pool).await.map(|r| r.rows_affected)
 }}
-
 "#,
         struct_name = struct_name,
         table_name = table.name,
@@ -708,14 +682,11 @@ fn generate_update_plain_method(
         r#"/// Update a record by primary key with individual parameters
 #[allow(clippy::too_many_arguments)]
 pub async fn {method_name}<P: Pool>(pool: &P, {all_params}) -> Result<u64> {{
-    Query::new("UPDATE `{table_name}` SET {set_clause} WHERE {where_clause}")
+Query::new("UPDATE `{table_name}` SET {set_clause} WHERE {where_clause}")
 {bind_section_update}
 {bind_section_pk}
-        .execute(pool)
-        .await
-        .map(|r| r.rows_affected)
+.execute(pool).await.map(|r| r.rows_affected)
 }}
-
 "#,
         method_name = method_name,
         all_params = all_params,
@@ -827,12 +798,10 @@ fn generate_find_by_method(
         format!(
             r#"/// Find by {source}: returns {return_desc}
 pub async fn {method_name}<P: Pool>(pool: &P, {params}) -> Result<{return_type}> {{
-    Query::new("SELECT {select_columns} FROM `{table_name}` WHERE {where_clause}")
+Query::new("SELECT {select_columns} FROM `{table_name}` WHERE {where_clause}")
 {bind_section}
-        .{fetch_method}(pool)
-        .await
+.{fetch_method}(pool).await
 }}
-
 "#,
             source = sig.source.to_lowercase().replace('_', " "),
             return_desc = return_desc,
@@ -897,18 +866,17 @@ fn generate_find_by_method_nullable(
         format!("vec![{}].join(\" AND \")", parts)
     };
 
-    let bind_code = bind_parts.join("\n        ");
+    let bind_code = bind_parts.join("\n");
 
     format!(
         r#"/// Find by {source}: returns {return_desc}
 pub async fn {method_name}<P: Pool>(pool: &P, {params}) -> Result<{return_type}> {{
-    let where_clause = {where_expr};
-    let sql = format!("SELECT {select_columns} FROM `{table_name}` WHERE {{}}", where_clause);
-    let mut query = rdbi::DynamicQuery::new(sql);
-    {bind_code}
-    query.{fetch_method}(pool).await
+let where_clause = {where_expr};
+let sql = format!("SELECT {select_columns} FROM `{table_name}` WHERE {{}}", where_clause);
+let mut query = rdbi::DynamicQuery::new(sql);
+{bind_code}
+query.{fetch_method}(pool).await
 }}
-
 "#,
         source = sig.source.to_lowercase().replace('_', " "),
         return_desc = return_desc,
@@ -988,20 +956,15 @@ fn generate_single_find_by_list(
     format!(
         r#"/// Find by list of {column_name_plural} (IN clause)
 pub async fn {method_name}<P: Pool>(pool: &P, {param_name}: &[{inner_type}]) -> Result<Vec<{struct_name}>> {{
-    if {param_name}.is_empty() {{
-        return Ok(Vec::new());
-    }}
-    let placeholders = {param_name}.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-    let query = format!(
-        "SELECT {select_columns} FROM `{table_name}` WHERE `{column_name}` IN ({{}})",
-        placeholders
-    );
-    rdbi::DynamicQuery::new(query)
-        .bind_all({param_name})
-        .fetch_all(pool)
-        .await
+if {param_name}.is_empty() {{
+return Ok(Vec::new());
 }}
-
+let placeholders = {param_name}.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+let query = format!("SELECT {select_columns} FROM `{table_name}` WHERE `{column_name}` IN ({{}})", placeholders);
+rdbi::DynamicQuery::new(query)
+.bind_all({param_name})
+.fetch_all(pool).await
+}}
 "#,
         column_name_plural = column_name_plural,
         column_name = column_name,
@@ -1121,7 +1084,7 @@ fn generate_composite_enum_list_method(
     for col_name in columns {
         if !enum_columns.contains(col_name.as_str()) {
             let param_name = escape_field_name(col_name);
-            bind_code.push_str(&format!("        .bind({})\n", param_name));
+            bind_code.push_str(&format!(".bind({})\n", param_name));
         }
     }
 
@@ -1129,7 +1092,7 @@ fn generate_composite_enum_list_method(
     for col_name in columns {
         if enum_columns.contains(col_name.as_str()) {
             let param_name = pluralize(&escape_field_name(col_name));
-            bind_code.push_str(&format!("        .bind_all({})\n", param_name));
+            bind_code.push_str(&format!(".bind_all({})\n", param_name));
         }
     }
 
@@ -1170,19 +1133,12 @@ fn generate_composite_enum_list_method(
     format!(
         r#"/// Find by {column_desc} (composite index with IN clause for enum columns)
 pub async fn {method_name}<P: Pool>(pool: &P, {params}) -> Result<Vec<{struct_name}>> {{
-    // Check for empty enum lists
 {empty_checks}
-    // Build IN clause placeholders for enum columns
-    let where_clause = format!("{where_template}", {format_args});
-    let query = format!(
-        "SELECT {select_columns} FROM `{table_name}` WHERE {{}}",
-        where_clause
-    );
-    rdbi::DynamicQuery::new(query)
-{bind_code}        .fetch_all(pool)
-        .await
+let where_clause = format!("{where_template}", {format_args});
+let query = format!("SELECT {select_columns} FROM `{table_name}` WHERE {{}}", where_clause);
+rdbi::DynamicQuery::new(query)
+{bind_code}.fetch_all(pool).await
 }}
-
 "#,
         column_desc = column_desc.join(" and "),
         method_name = method_name,
@@ -1204,7 +1160,7 @@ fn generate_empty_checks(columns: &[String], enum_columns: &HashSet<&str>) -> St
         if enum_columns.contains(col_name.as_str()) {
             let param_name = pluralize(&escape_field_name(col_name));
             checks.push_str(&format!(
-                "    if {}.is_empty() {{ return Ok(Vec::new()); }}\n",
+                "if {}.is_empty() {{ return Ok(Vec::new()); }}\n",
                 param_name
             ));
         }
@@ -1237,48 +1193,21 @@ fn generate_pagination_methods(
 
     format!(
         r#"/// Find all records with pagination and sorting
-pub async fn find_all_paginated<P: Pool>(
-    pool: &P,
-    limit: i32,
-    offset: i32,
-    sort_by: crate::{models_module}::{sort_by_enum},
-    sort_dir: crate::{models_module}::SortDirection,
-) -> Result<Vec<{struct_name}>> {{
-    let order_clause = format!("{{}} {{}}", sort_by.as_sql(), sort_dir.as_sql());
-    let query = format!(
-        "SELECT {select_columns} FROM `{table_name}` ORDER BY {{}} LIMIT ? OFFSET ?",
-        order_clause
-    );
-    rdbi::DynamicQuery::new(query)
-        .bind(limit)
-        .bind(offset)
-        .fetch_all(pool)
-        .await
+pub async fn find_all_paginated<P: Pool>(pool: &P, limit: i32, offset: i32, sort_by: crate::{models_module}::{sort_by_enum}, sort_dir: crate::{models_module}::SortDirection) -> Result<Vec<{struct_name}>> {{
+let order_clause = format!("{{}} {{}}", sort_by.as_sql(), sort_dir.as_sql());
+let query = format!("SELECT {select_columns} FROM `{table_name}` ORDER BY {{}} LIMIT ? OFFSET ?", order_clause);
+rdbi::DynamicQuery::new(query).bind(limit).bind(offset).fetch_all(pool).await
 }}
 
 /// Get paginated result with total count
-pub async fn get_paginated_result<P: Pool>(
-    pool: &P,
-    page_size: i32,
-    current_page: i32,
-    sort_by: crate::{models_module}::{sort_by_enum},
-    sort_dir: crate::{models_module}::SortDirection,
-) -> Result<crate::{models_module}::PaginatedResult<{struct_name}>> {{
-    let page_size = page_size.max(1);
-    let current_page = current_page.max(1);
-    let offset = (current_page - 1) * page_size;
-
-    let total_count = count_all(pool).await?;
-    let items = find_all_paginated(pool, page_size, offset, sort_by, sort_dir).await?;
-
-    Ok(crate::{models_module}::PaginatedResult::new(
-        items,
-        total_count,
-        current_page,
-        page_size,
-    ))
+pub async fn get_paginated_result<P: Pool>(pool: &P, page_size: i32, current_page: i32, sort_by: crate::{models_module}::{sort_by_enum}, sort_dir: crate::{models_module}::SortDirection) -> Result<crate::{models_module}::PaginatedResult<{struct_name}>> {{
+let page_size = page_size.max(1);
+let current_page = current_page.max(1);
+let offset = (current_page - 1) * page_size;
+let total_count = count_all(pool).await?;
+let items = find_all_paginated(pool, page_size, offset, sort_by, sort_dir).await?;
+Ok(crate::{models_module}::PaginatedResult::new(items, total_count, current_page, page_size))
 }}
-
 "#,
         struct_name = struct_name,
         select_columns = select_columns,

@@ -118,7 +118,7 @@ pub fn generate(config: &CodegenConfig) -> Result<()> {
                 );
 
                 if !config.dry_run {
-                    std::fs::write(&parent_mod_path, parent_mod_content)?;
+                    std::fs::write(&parent_mod_path, &parent_mod_content)?;
                     info!("Generated parent mod.rs at {:?}", parent_mod_path);
                 }
             }

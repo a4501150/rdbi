@@ -18,9 +18,15 @@ impl rdbi::FromValue for UsersStatus {
                 "ACTIVE" => Ok(Self::Active),
                 "INACTIVE" => Ok(Self::Inactive),
                 "PENDING" => Ok(Self::Pending),
-                _ => Err(rdbi::Error::TypeConversion { expected: "UsersStatus", actual: s }),
+                _ => Err(rdbi::Error::TypeConversion {
+                    expected: "UsersStatus",
+                    actual: s,
+                }),
             },
-            _ => Err(rdbi::Error::TypeConversion { expected: "UsersStatus", actual: value.type_name().to_string() }),
+            _ => Err(rdbi::Error::TypeConversion {
+                expected: "UsersStatus",
+                actual: value.type_name().to_string(),
+            }),
         }
     }
 }

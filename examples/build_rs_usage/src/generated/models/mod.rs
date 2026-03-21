@@ -35,12 +35,7 @@ pub struct PaginatedResult<T> {
 }
 
 impl<T> PaginatedResult<T> {
-    pub fn new(
-        items: Vec<T>,
-        total_count: i64,
-        current_page: i32,
-        page_size: i32,
-    ) -> Self {
+    pub fn new(items: Vec<T>, total_count: i64, current_page: i32, page_size: i32) -> Self {
         let total_pages = ((total_count as f64) / (page_size as f64)).ceil() as i32;
         let has_next = current_page < total_pages;
         Self {
