@@ -44,7 +44,9 @@ impl MySqlPool {
     ///
     /// The URL format is: `mysql://user:password@host:port/database`
     pub fn new(url: &str) -> Result<Self> {
-        let inner = MysqlAsyncPool::new(url);
+        let opts =
+            mysql_async::Opts::from_url(url).map_err(|e| Error::Connection(e.to_string()))?;
+        let inner = MysqlAsyncPool::new(opts);
         Ok(Self { inner })
     }
 
@@ -141,9 +143,10 @@ impl MySqlPoolBuilder {
         if self.pool_min.is_some() || self.pool_max.is_some() {
             let min = self.pool_min.unwrap_or(10);
             let max = self.pool_max.unwrap_or(100);
-            if let Some(constraints) = mysql_async::PoolConstraints::new(min, max) {
-                pool_opts = pool_opts.with_constraints(constraints);
-            }
+            let constraints = mysql_async::PoolConstraints::new(min, max).ok_or_else(|| {
+                Error::Connection(format!("pool_min ({min}) must not exceed pool_max ({max})"))
+            })?;
+            pool_opts = pool_opts.with_constraints(constraints);
         }
 
         if let Some(ttl) = self.inactive_connection_ttl {
