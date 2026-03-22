@@ -311,35 +311,31 @@ rdbi::with_connection!(pool, |conn| {
 }).await?;
 ```
 
-### Generic Error Support
+### Error Handling
 
-The macros accept any error type `E` where `E: From<rdbi::Error>`. This means `anyhow::Error`, custom error enums, or plain `rdbi::Error` all work with `?` naturally:
+The default macro arms use `rdbi::Error` as the body's error type, so there's never any type ambiguity. Use `.await?` to propagate into your caller's error type:
 
 ```rust
-// Service layer using anyhow — rdbi errors auto-convert, non-DB errors work too
+// Body uses rdbi::Error internally; .await? converts to anyhow::Error
 async fn create_order(pool: &MySqlPool, user: &User, order: &Order) -> anyhow::Result<u64> {
     let id = rdbi::in_transaction!(pool, |tx| {
-        dao::users::insert(tx, &user).await?;   // rdbi::Error -> anyhow via ?
-        validate_inventory(&order).await?;        // anyhow errors work too
+        dao::users::insert(tx, &user).await?;
         let id = dao::orders::insert(tx, &order).await?;
         Ok(id)
-    }).await?;
+    }).await?;  // rdbi::Error -> anyhow::Error via From
     Ok(id)
 }
-
-// Any code that fails inside the body triggers a rollback.
-// Put external calls (HTTP, etc.) inside only when they must succeed atomically
-// with the DB writes. Otherwise, call them after the transaction commits.
 ```
 
 ### Explicit Error Type
 
-When the error type can't be inferred (e.g., the body only contains rdbi operations and returns `Ok(())`), you can specify it explicitly as the second argument:
+When you need non-rdbi errors inside the body (e.g., `anyhow::bail!()`, custom errors), specify the error type explicitly:
 
 ```rust
-// Without explicit type, `Ok(())` is ambiguous — both rdbi::Error and anyhow::Error match
-rdbi::in_transaction!(pool, rdbi::Error, |tx| {
-    dao::users::insert(tx, &user).await?;
+// Body uses anyhow::Error — can mix rdbi and non-rdbi errors
+rdbi::in_transaction!(pool, anyhow::Error, |tx| {
+    dao::users::insert(tx, &user).await?;      // rdbi::Error -> anyhow via ?
+    validate_inventory(&order).await?;           // anyhow errors work too
     Ok(())
 }).await?;
 

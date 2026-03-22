@@ -5,19 +5,22 @@
 /// This macro uses inline async blocks instead of closures, so captured references
 /// don't need to be `'static`. No `use rdbi::Transactional` import is required.
 ///
+/// The default arm (without explicit error type) uses `rdbi::Error` inside the body.
+/// Use `.await?` to propagate the error into your caller's error type (e.g., `anyhow::Error`).
+///
 /// # Syntax
 ///
 /// ```ignore
-/// // Error type inferred from context:
+/// // Default: body uses rdbi::Error, returns rdbi::Result<T>
 /// rdbi::in_transaction!(pool, |tx| {
 ///     dao::users::insert(tx, &user).await?;
 ///     Ok(id)
 /// }).await?;
 ///
-/// // Explicit error type (useful when inference fails, e.g. `Ok(())`):
-/// rdbi::in_transaction!(pool, rdbi::Error, |tx| {
+/// // Explicit error type: body uses the specified error type
+/// rdbi::in_transaction!(pool, anyhow::Error, |tx| {
 ///     dao::users::insert(tx, &user).await?;
-///     Ok(())
+///     anyhow::bail!("something went wrong");
 /// }).await?;
 /// ```
 ///
@@ -67,14 +70,14 @@ macro_rules! in_transaction {
             use $crate::Transactional as _;
             let __rdbi_tx = match $pool.begin_with($crate::IsolationLevel::default()).await {
                 Ok(tx) => tx,
-                Err(e) => return Err(::std::convert::Into::into(e)),
+                Err(e) => return Err(e),
             };
             let $tx = &__rdbi_tx;
-            let __rdbi_result = (async { $body }).await;
+            let __rdbi_result: $crate::Result<_> = (async { $body }).await;
             match __rdbi_result {
                 Ok(v) => match __rdbi_tx.commit().await {
                     Ok(()) => Ok(v),
-                    Err(e) => Err(::std::convert::Into::into(e)),
+                    Err(e) => Err(e),
                 },
                 Err(e) => {
                     let _ = __rdbi_tx.rollback().await;
@@ -93,14 +96,14 @@ macro_rules! in_transaction {
 /// # Syntax
 ///
 /// ```ignore
-/// // Error type inferred:
+/// // Default: body uses rdbi::Error
 /// rdbi::in_transaction_with!(pool, IsolationLevel::ReadCommitted, |tx| {
 ///     dao::users::insert(tx, &user).await?;
 ///     Ok(())
 /// }).await?;
 ///
 /// // Explicit error type:
-/// rdbi::in_transaction_with!(pool, IsolationLevel::ReadCommitted, rdbi::Error, |tx| {
+/// rdbi::in_transaction_with!(pool, IsolationLevel::ReadCommitted, anyhow::Error, |tx| {
 ///     dao::users::insert(tx, &user).await?;
 ///     Ok(())
 /// }).await?;
@@ -135,14 +138,14 @@ macro_rules! in_transaction_with {
             use $crate::Transactional as _;
             let __rdbi_tx = match $pool.begin_with($level).await {
                 Ok(tx) => tx,
-                Err(e) => return Err(::std::convert::Into::into(e)),
+                Err(e) => return Err(e),
             };
             let $tx = &__rdbi_tx;
-            let __rdbi_result = (async { $body }).await;
+            let __rdbi_result: $crate::Result<_> = (async { $body }).await;
             match __rdbi_result {
                 Ok(v) => match __rdbi_tx.commit().await {
                     Ok(()) => Ok(v),
-                    Err(e) => Err(::std::convert::Into::into(e)),
+                    Err(e) => Err(e),
                 },
                 Err(e) => {
                     let _ = __rdbi_tx.rollback().await;
@@ -160,13 +163,13 @@ macro_rules! in_transaction_with {
 /// # Syntax
 ///
 /// ```ignore
-/// // Error type inferred:
+/// // Default: body uses rdbi::Error
 /// rdbi::with_connection!(pool, |conn| {
 ///     dao::users::find_all(conn).await
 /// }).await?;
 ///
 /// // Explicit error type:
-/// rdbi::with_connection!(pool, rdbi::Error, |conn| {
+/// rdbi::with_connection!(pool, anyhow::Error, |conn| {
 ///     dao::users::find_all(conn).await
 /// }).await?;
 /// ```
@@ -182,7 +185,8 @@ macro_rules! with_connection {
     ($pool:expr, |$conn:ident| $body:expr) => {
         async {
             let $conn = &$pool;
-            (async { $body }).await
+            let __rdbi_result: $crate::Result<_> = (async { $body }).await;
+            __rdbi_result
         }
     };
 }

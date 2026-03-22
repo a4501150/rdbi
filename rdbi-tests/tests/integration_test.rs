@@ -1922,8 +1922,9 @@ async fn test_transaction_with_anyhow_result() {
     let pool = MySqlPool::new(get_db_url()).unwrap();
     clean_all_tables(&pool).await;
 
-    // Closure returns anyhow::Result — rdbi errors auto-convert via From
-    let result: anyhow::Result<u64> = rdbi::in_transaction!(pool, |tx| {
+    // Default arm returns rdbi::Result; .await? converts to caller's error type.
+    // Use explicit arm when you need anyhow::Error inside the body.
+    let result = rdbi::in_transaction!(pool, |tx| {
         let user = Users {
             id: 0,
             username: "anyhow_user".to_string(),
@@ -1955,8 +1956,9 @@ async fn test_transaction_rollback_with_anyhow_error() {
     let pool = MySqlPool::new(get_db_url()).unwrap();
     clean_all_tables(&pool).await;
 
-    // Insert a user first to verify rollback
-    let result: anyhow::Result<u64> = rdbi::in_transaction!(pool, |tx| {
+    // Insert a user first to verify rollback.
+    // Use explicit anyhow::Error arm since the body uses anyhow::bail!().
+    let result: anyhow::Result<u64> = rdbi::in_transaction!(pool, anyhow::Error, |tx| {
         let user = Users {
             id: 0,
             username: "anyhow_rollback".to_string(),
@@ -1992,28 +1994,26 @@ async fn test_transaction_with_macro_isolation_level() {
     let pool = MySqlPool::new(get_db_url()).unwrap();
     clean_all_tables(&pool).await;
 
-    let id: anyhow::Result<u64> =
-        rdbi::in_transaction_with!(pool, rdbi::IsolationLevel::ReadCommitted, |tx| {
-            let user = Users {
-                id: 0,
-                username: "isolation_user".to_string(),
-                email: "isolation@example.com".to_string(),
-                first_name: None,
-                last_name: None,
-                status: UsersStatus::Active,
-                is_active: true,
-                age: None,
-                created_at: None,
-                updated_at: None,
-                birth_date: None,
-                login_time: None,
-            };
-            let id = dao::users::insert(tx, &user).await?;
-            Ok(id)
-        })
-        .await;
-
-    let id = id.unwrap();
+    let id = rdbi::in_transaction_with!(pool, rdbi::IsolationLevel::ReadCommitted, |tx| {
+        let user = Users {
+            id: 0,
+            username: "isolation_user".to_string(),
+            email: "isolation@example.com".to_string(),
+            first_name: None,
+            last_name: None,
+            status: UsersStatus::Active,
+            is_active: true,
+            age: None,
+            created_at: None,
+            updated_at: None,
+            birth_date: None,
+            login_time: None,
+        };
+        let id = dao::users::insert(tx, &user).await?;
+        Ok(id)
+    })
+    .await
+    .unwrap();
     let found = dao::users::find_by_id(&pool, id as i64).await.unwrap();
     assert!(found.is_some());
 }
@@ -2046,13 +2046,14 @@ async fn test_with_connection_macro() {
     let pool = MySqlPool::new(get_db_url()).unwrap();
     clean_all_tables(&pool).await;
 
-    let count: anyhow::Result<i64> = rdbi::with_connection!(pool, |conn| {
+    let count = rdbi::with_connection!(pool, |conn| {
         let c = dao::users::count_all(conn).await?;
         Ok(c)
     })
-    .await;
+    .await
+    .unwrap();
 
-    assert_eq!(count.unwrap(), 0);
+    assert_eq!(count, 0);
 }
 
 #[tokio::test]
@@ -2066,7 +2067,7 @@ async fn test_transaction_macro_non_static_references() {
     let username = "non_static_user";
     let email = "non_static@example.com";
 
-    let id: anyhow::Result<u64> = rdbi::in_transaction!(pool, |tx| {
+    let id = rdbi::in_transaction!(pool, |tx| {
         let user = Users {
             id: 0,
             username: username.to_string(),
@@ -2084,9 +2085,8 @@ async fn test_transaction_macro_non_static_references() {
         let id = dao::users::insert(tx, &user).await?;
         Ok(id)
     })
-    .await;
-
-    let id = id.unwrap();
+    .await
+    .unwrap();
 
     // Verify the references are still usable after the macro
     assert_eq!(username, "non_static_user");

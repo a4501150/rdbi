@@ -58,36 +58,27 @@ rdbi provides three macros for transactional operations. **Always use the macros
 | `rdbi::with_connection!(pool, \|conn\| { ... })` | N/A | No transaction; each statement auto-commits |
 | `rdbi::with_connection!(pool, ErrorType, \|conn\| { ... })` | N/A | Same, with explicit error type |
 
-### Generic error support
+### Error handling
 
-The body's error type `E` is generic with bound `E: From<rdbi::Error>`. This means the body can return `rdbi::Result`, `anyhow::Result`, or any custom `Result<T, E>` where `E: From<rdbi::Error>`. All DAO calls inside the body use `?` naturally — `rdbi::Error` auto-converts into the caller's error type.
+The default macro arms use `rdbi::Error` as the body's error type — no type ambiguity. Use `.await?` to propagate into your caller's error type (e.g., `anyhow::Error`):
 
-**When the error type can't be inferred** (e.g., body only has rdbi errors and returns `Ok(())`), use the explicit error type arm:
-```rust
-rdbi::in_transaction!(pool, rdbi::Error, |tx| {
-    dao::users::insert(tx, &user).await?;
-    Ok(())
-}).await?;
-```
-
-Alternatively, annotate the binding:
-```rust
-let result: rdbi::Result<()> = rdbi::in_transaction!(pool, |tx| {
-    dao::users::insert(tx, &user).await?;
-    Ok(())
-}).await;
-```
-
-**When the caller's function returns `anyhow::Result`**, inference works automatically:
 ```rust
 async fn create_order(pool: &MySqlPool, user: &User) -> anyhow::Result<u64> {
     let id = rdbi::in_transaction!(pool, |tx| {
-        dao::users::insert(tx, &user).await?;     // rdbi::Error -> anyhow
-        validate_inventory().await?;                // any error -> anyhow
+        dao::users::insert(tx, &user).await?;
         Ok(user.id)
-    }).await?;
+    }).await?;  // rdbi::Error -> anyhow::Error via From
     Ok(id)
 }
+```
+
+**When you need non-rdbi errors inside the body** (e.g., `anyhow::bail!()`, custom errors), use the explicit error type arm:
+```rust
+rdbi::in_transaction!(pool, anyhow::Error, |tx| {
+    dao::users::insert(tx, &user).await?;     // rdbi::Error -> anyhow
+    validate_inventory().await?;                // any error -> anyhow
+    Ok(())
+}).await?;
 ```
 
 ### Non-'static references
