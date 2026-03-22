@@ -902,7 +902,7 @@ async fn test_transaction_commit() {
     let pool = MySqlPool::new(get_db_url()).unwrap();
     clean_all_tables(&pool).await;
 
-    let result = pool
+    let result: rdbi::Result<u64> = pool
         .in_transaction(|tx| {
             Box::pin(async move {
                 // Insert user in transaction
@@ -925,8 +925,8 @@ async fn test_transaction_commit() {
                 Ok(id)
             })
         })
-        .await
-        .unwrap();
+        .await;
+    let result = result.unwrap();
 
     // Verify user exists after commit
     let found = dao::users::find_by_id(&pool, result as i64).await.unwrap();
@@ -1880,4 +1880,177 @@ async fn test_bulk_find_by_emails() {
         .await
         .unwrap();
     assert_eq!(found_by_usernames.len(), 2);
+}
+
+// ============ Generic Error & Macro Tests ============
+
+#[tokio::test]
+#[serial]
+async fn test_transaction_macro_with_rdbi_result() {
+    let pool = MySqlPool::new(get_db_url()).unwrap();
+    clean_all_tables(&pool).await;
+
+    let id: rdbi::Result<u64> = rdbi::in_transaction!(pool, |tx| {
+        let user = Users {
+            id: 0,
+            username: "macro_user".to_string(),
+            email: "macro@example.com".to_string(),
+            first_name: None,
+            last_name: None,
+            status: UsersStatus::Active,
+            is_active: true,
+            age: None,
+            created_at: None,
+            updated_at: None,
+            birth_date: None,
+            login_time: None,
+        };
+        let id = dao::users::insert(tx, &user).await?;
+        Ok(id)
+    })
+    .await;
+    let id = id.unwrap();
+
+    let found = dao::users::find_by_id(&pool, id as i64).await.unwrap();
+    assert!(found.is_some());
+    assert_eq!(found.unwrap().username, "macro_user");
+}
+
+#[tokio::test]
+#[serial]
+async fn test_transaction_with_anyhow_result() {
+    let pool = MySqlPool::new(get_db_url()).unwrap();
+    clean_all_tables(&pool).await;
+
+    // Closure returns anyhow::Result — rdbi errors auto-convert via From
+    let result: anyhow::Result<u64> = rdbi::in_transaction!(pool, |tx| {
+        let user = Users {
+            id: 0,
+            username: "anyhow_user".to_string(),
+            email: "anyhow@example.com".to_string(),
+            first_name: None,
+            last_name: None,
+            status: UsersStatus::Active,
+            is_active: true,
+            age: None,
+            created_at: None,
+            updated_at: None,
+            birth_date: None,
+            login_time: None,
+        };
+        let id = dao::users::insert(tx, &user).await?;
+        Ok(id)
+    })
+    .await;
+
+    let id = result.unwrap();
+    let found = dao::users::find_by_id(&pool, id as i64).await.unwrap();
+    assert!(found.is_some());
+    assert_eq!(found.unwrap().username, "anyhow_user");
+}
+
+#[tokio::test]
+#[serial]
+async fn test_transaction_rollback_with_anyhow_error() {
+    let pool = MySqlPool::new(get_db_url()).unwrap();
+    clean_all_tables(&pool).await;
+
+    // Insert a user first to verify rollback
+    let result: anyhow::Result<u64> = rdbi::in_transaction!(pool, |tx| {
+        let user = Users {
+            id: 0,
+            username: "anyhow_rollback".to_string(),
+            email: "anyhow_rollback@example.com".to_string(),
+            first_name: None,
+            last_name: None,
+            status: UsersStatus::Active,
+            is_active: true,
+            age: None,
+            created_at: None,
+            updated_at: None,
+            birth_date: None,
+            login_time: None,
+        };
+        dao::users::insert(tx, &user).await?;
+
+        // Return an anyhow error (not an rdbi error) to trigger rollback
+        anyhow::bail!("Application-level failure")
+    })
+    .await;
+
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().to_string(), "Application-level failure");
+
+    // Verify the user was NOT persisted (transaction rolled back)
+    let count = dao::users::count_all(&pool).await.unwrap();
+    assert_eq!(count, 0);
+}
+
+#[tokio::test]
+#[serial]
+async fn test_transaction_with_macro_isolation_level() {
+    let pool = MySqlPool::new(get_db_url()).unwrap();
+    clean_all_tables(&pool).await;
+
+    let id: anyhow::Result<u64> =
+        rdbi::in_transaction_with!(pool, rdbi::IsolationLevel::ReadCommitted, |tx| {
+            let user = Users {
+                id: 0,
+                username: "isolation_user".to_string(),
+                email: "isolation@example.com".to_string(),
+                first_name: None,
+                last_name: None,
+                status: UsersStatus::Active,
+                is_active: true,
+                age: None,
+                created_at: None,
+                updated_at: None,
+                birth_date: None,
+                login_time: None,
+            };
+            let id = dao::users::insert(tx, &user).await?;
+            Ok(id)
+        })
+        .await;
+
+    let id = id.unwrap();
+    let found = dao::users::find_by_id(&pool, id as i64).await.unwrap();
+    assert!(found.is_some());
+}
+
+#[tokio::test]
+#[serial]
+async fn test_error_other_variant() {
+    // Test that Error::Other can wrap arbitrary errors
+    let custom_err = std::io::Error::new(std::io::ErrorKind::Other, "custom io error");
+    let rdbi_err = rdbi::Error::Other(Box::new(custom_err));
+    assert_eq!(rdbi_err.to_string(), "custom io error");
+
+    // Test that Error::Other works inside a transaction closure
+    let pool = MySqlPool::new(get_db_url()).unwrap();
+    clean_all_tables(&pool).await;
+
+    let result: Result<(), rdbi::Error> = rdbi::in_transaction!(pool, |_tx| {
+        let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "file not found");
+        Err(rdbi::Error::Other(Box::new(io_err)))
+    })
+    .await;
+
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().to_string(), "file not found");
+}
+
+#[tokio::test]
+#[serial]
+async fn test_with_connection_macro() {
+    let pool = MySqlPool::new(get_db_url()).unwrap();
+    clean_all_tables(&pool).await;
+
+    let count: anyhow::Result<i64> = rdbi::with_connection!(pool, |conn| {
+        let c = dao::users::count_all(conn).await?;
+        Ok(c)
+    })
+    .await;
+
+    assert_eq!(count.unwrap(), 0);
 }

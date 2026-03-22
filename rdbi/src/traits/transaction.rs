@@ -4,6 +4,7 @@ use crate::error::Result;
 use crate::traits::Pool;
 use std::future::Future;
 use std::pin::Pin;
+use std::result::Result as StdResult;
 
 /// Transaction isolation level.
 ///
@@ -104,9 +105,13 @@ pub trait Transactional: Pool {
     /// The transaction is automatically committed if the closure returns `Ok`,
     /// and rolled back if it returns `Err`.
     ///
+    /// The error type `E` is generic — the closure can return any error type that
+    /// implements `From<rdbi::Error>`, such as `anyhow::Error` or a custom error enum.
+    ///
     /// # Example
     ///
     /// ```ignore
+    /// // With rdbi::Result (default)
     /// let result = pool.in_transaction(|tx| Box::pin(async move {
     ///     Query::new("INSERT INTO users (name) VALUES (?)")
     ///         .bind("Alice")
@@ -114,25 +119,59 @@ pub trait Transactional: Pool {
     ///         .await?;
     ///     Ok(42)
     /// })).await?;
+    ///
+    /// // With anyhow::Result
+    /// let result: anyhow::Result<i32> = pool.in_transaction(|tx| Box::pin(async move {
+    ///     dao::users::insert(tx, &user).await?;  // rdbi errors convert automatically
+    ///     validate_something()?;                   // anyhow errors work too
+    ///     Ok(42)
+    /// })).await;
     /// ```
-    fn in_transaction<R, F>(&self, f: F) -> impl Future<Output = Result<R>> + Send
+    ///
+    /// Or use the [`in_transaction!`](crate::in_transaction) macro to avoid `Box::pin` boilerplate:
+    ///
+    /// ```ignore
+    /// let result = rdbi::in_transaction!(pool, |tx| {
+    ///     dao::users::insert(tx, &user).await?;
+    ///     Ok(42)
+    /// }).await?;
+    /// ```
+    fn in_transaction<R, E, F>(&self, f: F) -> impl Future<Output = StdResult<R, E>> + Send
     where
         R: Send,
-        F: for<'a> FnOnce(&'a Self::Tx) -> Pin<Box<dyn Future<Output = Result<R>> + Send + 'a>>
+        E: From<crate::Error> + Send,
+        F: for<'a> FnOnce(
+                &'a Self::Tx,
+            )
+                -> Pin<Box<dyn Future<Output = StdResult<R, E>> + Send + 'a>>
             + Send;
 
     /// Execute a closure within a transaction with the specified isolation level.
     ///
     /// The transaction is automatically committed if the closure returns `Ok`,
-    /// and rolled back if it returns `Err`.
-    fn in_transaction_with<R, F>(
+    /// and rolled back if it returns `Err`. See [`in_transaction`](Self::in_transaction)
+    /// for details on generic error support.
+    ///
+    /// Or use the [`in_transaction_with!`](crate::in_transaction_with) macro:
+    ///
+    /// ```ignore
+    /// let result = rdbi::in_transaction_with!(pool, IsolationLevel::ReadCommitted, |tx| {
+    ///     dao::users::insert(tx, &user).await?;
+    ///     Ok(42)
+    /// }).await?;
+    /// ```
+    fn in_transaction_with<R, E, F>(
         &self,
         level: IsolationLevel,
         f: F,
-    ) -> impl Future<Output = Result<R>> + Send
+    ) -> impl Future<Output = StdResult<R, E>> + Send
     where
         R: Send,
-        F: for<'a> FnOnce(&'a Self::Tx) -> Pin<Box<dyn Future<Output = Result<R>> + Send + 'a>>
+        E: From<crate::Error> + Send,
+        F: for<'a> FnOnce(
+                &'a Self::Tx,
+            )
+                -> Pin<Box<dyn Future<Output = StdResult<R, E>> + Send + 'a>>
             + Send;
 
     /// Execute a closure with a connection but without a transaction.
@@ -149,8 +188,9 @@ pub trait Transactional: Pool {
     ///     Ok(())
     /// })).await?;
     /// ```
-    fn with_connection<R, F>(&self, f: F) -> impl Future<Output = Result<R>> + Send
+    fn with_connection<R, E, F>(&self, f: F) -> impl Future<Output = StdResult<R, E>> + Send
     where
         R: Send,
-        F: FnOnce(&Self) -> Pin<Box<dyn Future<Output = Result<R>> + Send + '_>> + Send;
+        E: From<crate::Error> + Send,
+        F: FnOnce(&Self) -> Pin<Box<dyn Future<Output = StdResult<R, E>> + Send + '_>> + Send;
 }

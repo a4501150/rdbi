@@ -278,33 +278,63 @@ impl dao::users::UsersDao {
 
 ## Transactions
 
-Execute operations with consistent callback-style API:
+rdbi provides three convenience macros that wrap the `Transactional` trait methods, eliminating `Box::pin(async move { ... })` boilerplate:
+
+| Macro | Method | Default Isolation | Description |
+|-------|--------|-------------------|-------------|
+| `in_transaction!(pool, \|tx\| { ... })` | `pool.in_transaction(...)` | `Serializable` | Auto-commit on `Ok`, auto-rollback on `Err` |
+| `in_transaction_with!(pool, level, \|tx\| { ... })` | `pool.in_transaction_with(...)` | Caller-specified | Same, with explicit isolation level |
+| `with_connection!(pool, \|conn\| { ... })` | `pool.with_connection(...)` | N/A | No transaction; each statement auto-commits |
+
+### Basic Usage
 
 ```rust
 use rdbi::{Transactional, IsolationLevel};
 
-// Without transaction - each statement auto-commits
-pool.with_connection(|conn| Box::pin(async move {
-    dao::users::insert(conn, &user).await?;
-    dao::orders::insert(conn, &order).await?;
-    Ok(())
-})).await?;
-
-// With transaction - auto-commit on Ok, auto-rollback on Err
-let order_id = pool.in_transaction(|tx| Box::pin(async move {
+// Auto-commit on Ok, auto-rollback on Err (default: Serializable isolation)
+let order_id = rdbi::in_transaction!(pool, |tx| {
     dao::users::insert(tx, &user).await?;
     dao::orders::insert(tx, &order).await?;
     Ok(order.id)
-})).await?;
+}).await?;
 
-// With custom isolation level
-pool.in_transaction_with(IsolationLevel::ReadCommitted, |tx| Box::pin(async move {
-    // Uses ReadCommitted instead of default Serializable
+// With explicit isolation level
+rdbi::in_transaction_with!(pool, IsolationLevel::ReadCommitted, |tx| {
+    dao::users::insert(tx, &user).await?;
     Ok(())
-})).await?;
+}).await?;
+
+// Without transaction - each statement auto-commits independently
+rdbi::with_connection!(pool, |conn| {
+    dao::users::insert(conn, &user).await?;
+    Ok(())
+}).await?;
 ```
 
-For manual control:
+### Generic Error Support
+
+Transaction closures accept any error type `E` where `E: From<rdbi::Error>`. This means `anyhow::Error`, custom error enums, or plain `rdbi::Error` all work with `?` naturally:
+
+```rust
+// Service layer using anyhow — rdbi errors auto-convert, non-DB errors work too
+async fn create_order(pool: &MySqlPool, user: &User, order: &Order) -> anyhow::Result<u64> {
+    let id = rdbi::in_transaction!(pool, |tx| {
+        dao::users::insert(tx, &user).await?;   // rdbi::Error -> anyhow via ?
+        validate_inventory(&order).await?;        // anyhow errors work too
+        let id = dao::orders::insert(tx, &order).await?;
+        Ok(id)
+    }).await?;
+    Ok(id)
+}
+
+// Any code that fails inside the closure (DB or not) triggers a rollback.
+// Put external calls (HTTP, etc.) inside only when they must succeed atomically
+// with the DB writes. Otherwise, call them after the transaction commits.
+```
+
+### Manual Transaction Control
+
+For cases where you need explicit begin/commit/rollback:
 
 ```rust
 let tx = pool.begin().await?;

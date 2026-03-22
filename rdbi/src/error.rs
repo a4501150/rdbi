@@ -38,4 +38,11 @@ pub enum Error {
     /// Row decode error
     #[error("Failed to decode row: {0}")]
     RowDecode(String),
+
+    /// An external error wrapped as a boxed trait object.
+    ///
+    /// Use this to embed non-rdbi errors (e.g., application-level or third-party errors)
+    /// into `rdbi::Error` without losing the original error chain.
+    #[error("{0}")]
+    Other(Box<dyn std::error::Error + Send + Sync>),
 }

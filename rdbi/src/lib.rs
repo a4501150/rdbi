@@ -33,6 +33,7 @@
 
 pub mod batch;
 pub mod error;
+mod macros;
 pub mod mysql;
 pub mod query;
 pub mod traits;

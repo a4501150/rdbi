@@ -292,32 +292,38 @@ impl Transactional for MySqlPool {
         Ok(MySqlTransaction::new(tx))
     }
 
-    async fn in_transaction<R, F>(&self, f: F) -> Result<R>
+    async fn in_transaction<R, E, F>(&self, f: F) -> std::result::Result<R, E>
     where
         R: Send,
+        E: From<crate::Error> + Send,
         F: for<'a> FnOnce(
                 &'a Self::Tx,
             ) -> std::pin::Pin<
-                Box<dyn std::future::Future<Output = Result<R>> + Send + 'a>,
+                Box<dyn std::future::Future<Output = std::result::Result<R, E>> + Send + 'a>,
             > + Send,
     {
         self.in_transaction_with(IsolationLevel::default(), f).await
     }
 
-    async fn in_transaction_with<R, F>(&self, level: IsolationLevel, f: F) -> Result<R>
+    async fn in_transaction_with<R, E, F>(
+        &self,
+        level: IsolationLevel,
+        f: F,
+    ) -> std::result::Result<R, E>
     where
         R: Send,
+        E: From<crate::Error> + Send,
         F: for<'a> FnOnce(
                 &'a Self::Tx,
             ) -> std::pin::Pin<
-                Box<dyn std::future::Future<Output = Result<R>> + Send + 'a>,
+                Box<dyn std::future::Future<Output = std::result::Result<R, E>> + Send + 'a>,
             > + Send,
     {
-        let tx = self.begin_with(level).await?;
+        let tx = self.begin_with(level).await.map_err(E::from)?;
 
         match f(&tx).await {
             Ok(result) => {
-                tx.commit().await?;
+                tx.commit().await.map_err(E::from)?;
                 Ok(result)
             }
             Err(e) => {
@@ -328,14 +334,15 @@ impl Transactional for MySqlPool {
         }
     }
 
-    async fn with_connection<R, F>(&self, f: F) -> Result<R>
+    async fn with_connection<R, E, F>(&self, f: F) -> std::result::Result<R, E>
     where
         R: Send,
+        E: From<crate::Error> + Send,
         F: FnOnce(
                 &Self,
-            )
-                -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<R>> + Send + '_>>
-            + Send,
+            ) -> std::pin::Pin<
+                Box<dyn std::future::Future<Output = std::result::Result<R, E>> + Send + '_>,
+            > + Send,
     {
         f(self).await
     }
