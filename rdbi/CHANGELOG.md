@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/a4501150/rdbi/compare/rdbi-v0.3.0...rdbi-v0.4.0) (2026-03-22)
+
+
+### Features
+
+* rewrite transaction macros with inline async blocks for better ergonomics ([d744302](https://github.com/a4501150/rdbi/commit/d744302fad86fe5dc0d8239808857b25a53e4b48))
+
 ## [0.3.0](https://github.com/a4501150/rdbi/compare/rdbi-v0.2.1...rdbi-v0.3.0) (2026-03-22)
 
 
