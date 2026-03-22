@@ -45,25 +45,36 @@ rdbi-codegen      (independent, no runtime dep on rdbi)
 
 ## Transaction macros and patterns
 
-rdbi provides three macros that wrap the `Transactional` trait methods. **Always use the macros** instead of calling the trait methods directly with `Box::pin(async move { ... })`.
+rdbi provides three macros for transactional operations. **Always use the macros** instead of calling the `Transactional` trait methods directly. No `use rdbi::Transactional` import is needed for macro usage.
 
 ### Macros
 
 | Macro | Default Isolation | Description |
 |-------|-------------------|-------------|
 | `rdbi::in_transaction!(pool, \|tx\| { ... })` | `Serializable` | Auto-commit on `Ok`, auto-rollback on `Err` |
+| `rdbi::in_transaction!(pool, ErrorType, \|tx\| { ... })` | `Serializable` | Same, with explicit error type |
 | `rdbi::in_transaction_with!(pool, level, \|tx\| { ... })` | Caller-specified | Same, with explicit isolation level |
+| `rdbi::in_transaction_with!(pool, level, ErrorType, \|tx\| { ... })` | Caller-specified | Same, with explicit isolation + error type |
 | `rdbi::with_connection!(pool, \|conn\| { ... })` | N/A | No transaction; each statement auto-commits |
+| `rdbi::with_connection!(pool, ErrorType, \|conn\| { ... })` | N/A | Same, with explicit error type |
 
 ### Generic error support
 
-The closure's error type `E` is generic with bound `E: From<rdbi::Error> + Send`. This means closures can return `rdbi::Result`, `anyhow::Result`, or any custom `Result<T, E>` where `E: From<rdbi::Error>`. All DAO calls inside the closure use `?` naturally — `rdbi::Error` auto-converts into the caller's error type.
+The body's error type `E` is generic with bound `E: From<rdbi::Error>`. This means the body can return `rdbi::Result`, `anyhow::Result`, or any custom `Result<T, E>` where `E: From<rdbi::Error>`. All DAO calls inside the body use `?` naturally — `rdbi::Error` auto-converts into the caller's error type.
 
-**When the caller's return type is `rdbi::Result`**, you must annotate the binding so Rust can infer `E`:
+**When the error type can't be inferred** (e.g., body only has rdbi errors and returns `Ok(())`), use the explicit error type arm:
 ```rust
-let result: rdbi::Result<u64> = rdbi::in_transaction!(pool, |tx| {
-    let id = dao::users::insert(tx, &user).await?;
-    Ok(id)
+rdbi::in_transaction!(pool, rdbi::Error, |tx| {
+    dao::users::insert(tx, &user).await?;
+    Ok(())
+}).await?;
+```
+
+Alternatively, annotate the binding:
+```rust
+let result: rdbi::Result<()> = rdbi::in_transaction!(pool, |tx| {
+    dao::users::insert(tx, &user).await?;
+    Ok(())
 }).await;
 ```
 
@@ -79,9 +90,25 @@ async fn create_order(pool: &MySqlPool, user: &User) -> anyhow::Result<u64> {
 }
 ```
 
+### Non-'static references
+
+The macros use inline async blocks (not closures), so captured `&str` and other non-`'static` references work without `.to_string()`:
+```rust
+async fn purchase(pool: &MySqlPool, order_id: &str) -> anyhow::Result<()> {
+    rdbi::in_transaction!(pool, |tx| {
+        rdbi::Query::new("UPDATE orders SET status = 'PAID' WHERE id = ?")
+            .bind(order_id)   // &str captured by reference — no cloning needed
+            .execute(tx).await?;
+        Ok(())
+    }).await?;
+    println!("Paid order {}", order_id);  // still usable after macro
+    Ok(())
+}
+```
+
 ### Rollback behavior
 
-Any `Err` returned from the closure — whether `rdbi::Error`, `anyhow::Error`, or a custom error — triggers an automatic rollback. This includes failed external HTTP calls, validation errors, etc. **Only put external calls (HTTP, gRPC, etc.) inside the transaction closure when they must succeed atomically with the DB writes.** Otherwise, perform them after the transaction commits.
+Any `Err` returned from the body — whether `rdbi::Error`, `anyhow::Error`, or a custom error — triggers an automatic rollback. This includes failed external HTTP calls, validation errors, etc. **Only put external calls (HTTP, gRPC, etc.) inside the transaction body when they must succeed atomically with the DB writes.** Otherwise, perform them after the transaction commits.
 
 ### Example: service layer with mixed DB + external calls
 

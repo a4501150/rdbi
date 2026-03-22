@@ -2054,3 +2054,153 @@ async fn test_with_connection_macro() {
 
     assert_eq!(count.unwrap(), 0);
 }
+
+#[tokio::test]
+#[serial]
+async fn test_transaction_macro_non_static_references() {
+    let pool = MySqlPool::new(get_db_url()).unwrap();
+    clean_all_tables(&pool).await;
+
+    // Local &str values — would fail with the old closure-based macro
+    // because `async move` requires captured references to be 'static.
+    let username = "non_static_user";
+    let email = "non_static@example.com";
+
+    let id: anyhow::Result<u64> = rdbi::in_transaction!(pool, |tx| {
+        let user = Users {
+            id: 0,
+            username: username.to_string(),
+            email: email.to_string(),
+            first_name: None,
+            last_name: None,
+            status: UsersStatus::Active,
+            is_active: true,
+            age: None,
+            created_at: None,
+            updated_at: None,
+            birth_date: None,
+            login_time: None,
+        };
+        let id = dao::users::insert(tx, &user).await?;
+        Ok(id)
+    })
+    .await;
+
+    let id = id.unwrap();
+
+    // Verify the references are still usable after the macro
+    assert_eq!(username, "non_static_user");
+    assert_eq!(email, "non_static@example.com");
+
+    let found = dao::users::find_by_id(&pool, id as i64).await.unwrap();
+    assert!(found.is_some());
+    assert_eq!(found.unwrap().username, "non_static_user");
+}
+
+#[tokio::test]
+#[serial]
+async fn test_transaction_macro_with_explicit_error_type() {
+    let pool = MySqlPool::new(get_db_url()).unwrap();
+    clean_all_tables(&pool).await;
+
+    // Explicit error type eliminates ambiguity with Ok(())
+    let result = rdbi::in_transaction!(pool, anyhow::Error, |tx| {
+        let user = Users {
+            id: 0,
+            username: "explicit_err".to_string(),
+            email: "explicit@example.com".to_string(),
+            first_name: None,
+            last_name: None,
+            status: UsersStatus::Active,
+            is_active: true,
+            age: None,
+            created_at: None,
+            updated_at: None,
+            birth_date: None,
+            login_time: None,
+        };
+        dao::users::insert(tx, &user).await?;
+        Ok(())
+    })
+    .await;
+
+    assert!(result.is_ok());
+    let count = dao::users::count_all(&pool).await.unwrap();
+    assert_eq!(count, 1);
+}
+
+#[tokio::test]
+#[serial]
+async fn test_in_transaction_with_explicit_error_type() {
+    let pool = MySqlPool::new(get_db_url()).unwrap();
+    clean_all_tables(&pool).await;
+
+    let result = rdbi::in_transaction_with!(
+        pool,
+        rdbi::IsolationLevel::ReadCommitted,
+        anyhow::Error,
+        |tx| {
+            let user = Users {
+                id: 0,
+                username: "explicit_with".to_string(),
+                email: "explicit_with@example.com".to_string(),
+                first_name: None,
+                last_name: None,
+                status: UsersStatus::Active,
+                is_active: true,
+                age: None,
+                created_at: None,
+                updated_at: None,
+                birth_date: None,
+                login_time: None,
+            };
+            dao::users::insert(tx, &user).await?;
+            Ok(())
+        }
+    )
+    .await;
+
+    assert!(result.is_ok());
+    let count = dao::users::count_all(&pool).await.unwrap();
+    assert_eq!(count, 1);
+}
+
+/// Verify that macros work without `use rdbi::Transactional` in scope.
+/// This module intentionally does NOT import the trait.
+mod no_trait_import_test {
+    use super::*;
+
+    #[tokio::test]
+    #[serial]
+    async fn test_transaction_macro_no_trait_import() {
+        let pool = MySqlPool::new(get_db_url()).unwrap();
+        clean_all_tables(&pool).await;
+
+        let result: rdbi::Result<i64> = rdbi::in_transaction!(pool, |tx| {
+            let count = dao::users::count_all(tx).await?;
+            Ok(count)
+        })
+        .await;
+
+        assert_eq!(result.unwrap(), 0);
+
+        // Also test in_transaction_with! without trait import
+        let result: rdbi::Result<i64> =
+            rdbi::in_transaction_with!(pool, rdbi::IsolationLevel::ReadCommitted, |tx| {
+                let count = dao::users::count_all(tx).await?;
+                Ok(count)
+            })
+            .await;
+
+        assert_eq!(result.unwrap(), 0);
+
+        // Also test with_connection! without trait import
+        let result: rdbi::Result<i64> = rdbi::with_connection!(pool, |conn| {
+            let count = dao::users::count_all(conn).await?;
+            Ok(count)
+        })
+        .await;
+
+        assert_eq!(result.unwrap(), 0);
+    }
+}

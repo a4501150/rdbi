@@ -278,18 +278,18 @@ impl dao::users::UsersDao {
 
 ## Transactions
 
-rdbi provides three convenience macros that wrap the `Transactional` trait methods, eliminating `Box::pin(async move { ... })` boilerplate:
+rdbi provides three convenience macros for transactional database operations. No trait imports are needed — just use the macros directly:
 
-| Macro | Method | Default Isolation | Description |
-|-------|--------|-------------------|-------------|
-| `in_transaction!(pool, \|tx\| { ... })` | `pool.in_transaction(...)` | `Serializable` | Auto-commit on `Ok`, auto-rollback on `Err` |
-| `in_transaction_with!(pool, level, \|tx\| { ... })` | `pool.in_transaction_with(...)` | Caller-specified | Same, with explicit isolation level |
-| `with_connection!(pool, \|conn\| { ... })` | `pool.with_connection(...)` | N/A | No transaction; each statement auto-commits |
+| Macro | Default Isolation | Description |
+|-------|-------------------|-------------|
+| `in_transaction!(pool, \|tx\| { ... })` | `Serializable` | Auto-commit on `Ok`, auto-rollback on `Err` |
+| `in_transaction_with!(pool, level, \|tx\| { ... })` | Caller-specified | Same, with explicit isolation level |
+| `with_connection!(pool, \|conn\| { ... })` | N/A | No transaction; each statement auto-commits |
 
 ### Basic Usage
 
 ```rust
-use rdbi::{Transactional, IsolationLevel};
+use rdbi::IsolationLevel;
 
 // Auto-commit on Ok, auto-rollback on Err (default: Serializable isolation)
 let order_id = rdbi::in_transaction!(pool, |tx| {
@@ -313,7 +313,7 @@ rdbi::with_connection!(pool, |conn| {
 
 ### Generic Error Support
 
-Transaction closures accept any error type `E` where `E: From<rdbi::Error>`. This means `anyhow::Error`, custom error enums, or plain `rdbi::Error` all work with `?` naturally:
+The macros accept any error type `E` where `E: From<rdbi::Error>`. This means `anyhow::Error`, custom error enums, or plain `rdbi::Error` all work with `?` naturally:
 
 ```rust
 // Service layer using anyhow — rdbi errors auto-convert, non-DB errors work too
@@ -327,9 +327,45 @@ async fn create_order(pool: &MySqlPool, user: &User, order: &Order) -> anyhow::R
     Ok(id)
 }
 
-// Any code that fails inside the closure (DB or not) triggers a rollback.
+// Any code that fails inside the body triggers a rollback.
 // Put external calls (HTTP, etc.) inside only when they must succeed atomically
 // with the DB writes. Otherwise, call them after the transaction commits.
+```
+
+### Explicit Error Type
+
+When the error type can't be inferred (e.g., the body only contains rdbi operations and returns `Ok(())`), you can specify it explicitly as the second argument:
+
+```rust
+// Without explicit type, `Ok(())` is ambiguous — both rdbi::Error and anyhow::Error match
+rdbi::in_transaction!(pool, rdbi::Error, |tx| {
+    dao::users::insert(tx, &user).await?;
+    Ok(())
+}).await?;
+
+// Also works with in_transaction_with!
+rdbi::in_transaction_with!(pool, IsolationLevel::ReadCommitted, anyhow::Error, |tx| {
+    dao::users::insert(tx, &user).await?;
+    Ok(())
+}).await?;
+```
+
+### Non-'static References
+
+Unlike the `Transactional` trait methods (which require `'static` closures), the macros use inline async blocks. This means captured `&str` and other non-`'static` references work without cloning:
+
+```rust
+async fn purchase(pool: &MySqlPool, order_id: &str, account_id: &str) -> anyhow::Result<()> {
+    rdbi::in_transaction!(pool, |tx| {
+        rdbi::Query::new("UPDATE orders SET status = 'PAID' WHERE id = ?")
+            .bind(order_id)   // &str captured by reference — no .to_string() needed
+            .execute(tx).await?;
+        Ok(())
+    }).await?;
+    // order_id and account_id are still usable here
+    println!("Paid order {} for account {}", order_id, account_id);
+    Ok(())
+}
 ```
 
 ### Manual Transaction Control
@@ -337,6 +373,8 @@ async fn create_order(pool: &MySqlPool, user: &User, order: &Order) -> anyhow::R
 For cases where you need explicit begin/commit/rollback:
 
 ```rust
+use rdbi::Transactional;
+
 let tx = pool.begin().await?;
 dao::users::insert(&tx, &user).await?;
 dao::orders::insert(&tx, &order).await?;
