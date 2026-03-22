@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/a4501150/rdbi/compare/rdbi-v0.4.0...rdbi-v0.4.1) (2026-03-22)
+
+
+### Bug Fixes
+
+* pin default macro arms to rdbi::Error for unambiguous type inference ([cd36411](https://github.com/a4501150/rdbi/commit/cd36411af12726757ba9416fee859e4a28342f88))
+
 ## [0.4.0](https://github.com/a4501150/rdbi/compare/rdbi-v0.3.0...rdbi-v0.4.0) (2026-03-22)
 
 
