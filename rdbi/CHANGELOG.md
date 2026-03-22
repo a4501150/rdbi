@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.0](https://github.com/a4501150/rdbi/compare/rdbi-v0.2.1...rdbi-v0.3.0) (2026-03-22)
+
+
+### Features
+
+* generic error support for transaction API with convenience macros ([e3fa73f](https://github.com/a4501150/rdbi/commit/e3fa73f9948d4cb54facb4c3c6319167da9cdbb2))
+
+
+### Bug Fixes
+
+* validate connection URL eagerly and return error on invalid pool constraints ([e207017](https://github.com/a4501150/rdbi/commit/e2070173980bb64300c33c7c6dec17981d7f4a76))
+
 ## [0.2.1](https://github.com/a4501150/rdbi/compare/rdbi-v0.2.0...rdbi-v0.2.1) (2026-02-07)
 
 
