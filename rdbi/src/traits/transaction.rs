@@ -19,11 +19,11 @@ pub enum IsolationLevel {
     ReadCommitted,
 
     /// Prevents dirty reads and non-repeatable reads but allows phantom reads.
+    /// This is the default for rdbi transactions (matches MySQL's default).
+    #[default]
     RepeatableRead,
 
     /// Provides full isolation. Transactions are completely isolated from one another.
-    /// This is the default for rdbi transactions.
-    #[default]
     Serializable,
 }
 

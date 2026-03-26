@@ -282,7 +282,7 @@ rdbi provides three convenience macros for transactional database operations. No
 
 | Macro | Default Isolation | Description |
 |-------|-------------------|-------------|
-| `in_transaction!(pool, \|tx\| { ... })` | `Serializable` | Auto-commit on `Ok`, auto-rollback on `Err` |
+| `in_transaction!(pool, \|tx\| { ... })` | `RepeatableRead` | Auto-commit on `Ok`, auto-rollback on `Err` |
 | `in_transaction_with!(pool, level, \|tx\| { ... })` | Caller-specified | Same, with explicit isolation level |
 | `with_connection!(pool, \|conn\| { ... })` | N/A | No transaction; each statement auto-commits |
 
@@ -291,7 +291,7 @@ rdbi provides three convenience macros for transactional database operations. No
 ```rust
 use rdbi::IsolationLevel;
 
-// Auto-commit on Ok, auto-rollback on Err (default: Serializable isolation)
+// Auto-commit on Ok, auto-rollback on Err (default: RepeatableRead isolation)
 let order_id = rdbi::in_transaction!(pool, |tx| {
     dao::users::insert(tx, &user).await?;
     dao::orders::insert(tx, &order).await?;
@@ -377,7 +377,7 @@ dao::orders::insert(&tx, &order).await?;
 tx.commit().await?; // or tx.rollback().await?
 ```
 
-**Isolation Levels:** `ReadUncommitted`, `ReadCommitted`, `RepeatableRead`, `Serializable` (default)
+**Isolation Levels:** `ReadUncommitted`, `ReadCommitted`, `RepeatableRead` (default), `Serializable`
 
 ## Derive Attributes
 

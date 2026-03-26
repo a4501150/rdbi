@@ -51,8 +51,8 @@ rdbi provides three macros for transactional operations. **Always use the macros
 
 | Macro | Default Isolation | Description |
 |-------|-------------------|-------------|
-| `rdbi::in_transaction!(pool, \|tx\| { ... })` | `Serializable` | Auto-commit on `Ok`, auto-rollback on `Err` |
-| `rdbi::in_transaction!(pool, ErrorType, \|tx\| { ... })` | `Serializable` | Same, with explicit error type |
+| `rdbi::in_transaction!(pool, \|tx\| { ... })` | `RepeatableRead` | Auto-commit on `Ok`, auto-rollback on `Err` |
+| `rdbi::in_transaction!(pool, ErrorType, \|tx\| { ... })` | `RepeatableRead` | Same, with explicit error type |
 | `rdbi::in_transaction_with!(pool, level, \|tx\| { ... })` | Caller-specified | Same, with explicit isolation level |
 | `rdbi::in_transaction_with!(pool, level, ErrorType, \|tx\| { ... })` | Caller-specified | Same, with explicit isolation + error type |
 | `rdbi::with_connection!(pool, \|conn\| { ... })` | N/A | No transaction; each statement auto-commits |
