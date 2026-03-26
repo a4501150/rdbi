@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/a4501150/rdbi/compare/rdbi-v0.4.1...rdbi-v0.5.0) (2026-03-26)
+
+
+### Features
+
+* change default transaction isolation level to RepeatableRead ([d465df6](https://github.com/a4501150/rdbi/commit/d465df617884ae46a266cac18de48f887c6c81b1))
+
 ## [0.4.1](https://github.com/a4501150/rdbi/compare/rdbi-v0.4.0...rdbi-v0.4.1) (2026-03-22)
 
 
