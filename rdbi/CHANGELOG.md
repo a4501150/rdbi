@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/a4501150/rdbi/compare/rdbi-v0.5.0...rdbi-v0.5.1) (2026-03-27)
+
+
+### Bug Fixes
+
+* clamp default pool_min to not exceed pool_max ([c76a10c](https://github.com/a4501150/rdbi/commit/c76a10cb5f086ac2c1b537702437f56f9307c2dc))
+
 ## [0.5.0](https://github.com/a4501150/rdbi/compare/rdbi-v0.4.1...rdbi-v0.5.0) (2026-03-26)
 
 
