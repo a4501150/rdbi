@@ -141,8 +141,8 @@ impl MySqlPoolBuilder {
         let mut pool_opts = mysql_async::PoolOpts::default();
 
         if self.pool_min.is_some() || self.pool_max.is_some() {
-            let min = self.pool_min.unwrap_or(10);
             let max = self.pool_max.unwrap_or(100);
+            let min = self.pool_min.unwrap_or(max.min(10));
             let constraints = mysql_async::PoolConstraints::new(min, max).ok_or_else(|| {
                 Error::Connection(format!("pool_min ({min}) must not exceed pool_max ({max})"))
             })?;
