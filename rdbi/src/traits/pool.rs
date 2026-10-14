@@ -18,6 +18,9 @@ pub struct ExecuteResult {
 ///
 /// This trait abstracts over different database backends, allowing
 /// the same query code to work with MySQL, PostgreSQL, etc.
+// async_trait desugars trait methods with a bare #[must_use]; clippy 1.99's
+// double_must_use flags the boxed future it returns.
+#[allow(clippy::double_must_use)]
 #[async_trait]
 pub trait Pool: Send + Sync {
     /// Execute a query and return the number of affected rows.
