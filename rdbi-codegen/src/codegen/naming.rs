@@ -55,6 +55,18 @@ pub fn generate_update_by_method_name(columns: &[String]) -> String {
     format!("update_by_{}", parts.join("_and_"))
 }
 
+/// Generate a partial update_by method name for columns
+pub fn generate_update_partial_by_method_name(columns: &[String]) -> String {
+    let parts: Vec<String> = columns.iter().map(|c| c.to_snake_case()).collect();
+    format!("update_partial_by_{}", parts.join("_and_"))
+}
+
+/// Generate a count_by method name for columns
+pub fn generate_count_by_method_name(columns: &[String]) -> String {
+    let parts: Vec<String> = columns.iter().map(|c| c.to_snake_case()).collect();
+    format!("count_by_{}", parts.join("_and_"))
+}
+
 /// Convert an enum value to a Rust variant name
 /// Handles cases like "ACTIVE", "active", "PendingReview", "IN_PROGRESS"
 pub fn to_enum_variant(value: &str) -> String {

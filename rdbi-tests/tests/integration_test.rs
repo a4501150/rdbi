@@ -240,6 +240,107 @@ async fn test_update_and_delete() {
 
 #[tokio::test]
 #[serial]
+async fn test_partial_update_by_pk() {
+    let pool = MySqlPool::new(get_db_url()).unwrap();
+    clean_all_tables(&pool).await;
+
+    let user = Users {
+        id: 0,
+        username: "partialuser".to_string(),
+        email: "partial@example.com".to_string(),
+        first_name: None,
+        last_name: None,
+        status: UsersStatus::Pending,
+        is_active: true,
+        age: Some(30),
+        created_at: None,
+        updated_at: None,
+        birth_date: None,
+        login_time: None,
+    };
+    let last_id = dao::users::insert(&pool, &user).await.unwrap();
+
+    // An all-None set is a no-op
+    let rows =
+        dao::users::update_partial_by_id(&pool, last_id as i64, dao::users::SetUsers::default())
+            .await
+            .unwrap();
+    assert_eq!(rows, 0);
+
+    // Update only status and age
+    let set = dao::users::SetUsers {
+        status: Some(UsersStatus::Active),
+        age: Some(31),
+        ..Default::default()
+    };
+    let rows = dao::users::update_partial_by_id(&pool, last_id as i64, set)
+        .await
+        .unwrap();
+    assert_eq!(rows, 1);
+
+    // Verify only the selected columns changed
+    let fetched = dao::users::find_by_id(&pool, last_id as i64)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(fetched.status, UsersStatus::Active);
+    assert_eq!(fetched.age, Some(31));
+    assert_eq!(fetched.username, "partialuser");
+    assert!(fetched.first_name.is_none());
+}
+
+#[tokio::test]
+#[serial]
+async fn test_count_by_and_delete_by_index() {
+    let pool = MySqlPool::new(get_db_url()).unwrap();
+    clean_all_tables(&pool).await;
+
+    let make_user = |n: &str, status: UsersStatus| Users {
+        id: 0,
+        username: n.to_string(),
+        email: format!("{}@example.com", n),
+        first_name: None,
+        last_name: None,
+        status,
+        is_active: true,
+        age: None,
+        created_at: None,
+        updated_at: None,
+        birth_date: None,
+        login_time: None,
+    };
+    dao::users::insert(&pool, &make_user("cb1", UsersStatus::Pending))
+        .await
+        .unwrap();
+    dao::users::insert(&pool, &make_user("cb2", UsersStatus::Pending))
+        .await
+        .unwrap();
+    dao::users::insert(&pool, &make_user("cb3", UsersStatus::Active))
+        .await
+        .unwrap();
+
+    let count = dao::users::count_by_status(&pool, UsersStatus::Pending)
+        .await
+        .unwrap();
+    assert_eq!(count, 2);
+
+    let deleted = dao::users::delete_by_status(&pool, UsersStatus::Pending)
+        .await
+        .unwrap();
+    assert_eq!(deleted, 2);
+
+    let count = dao::users::count_by_status(&pool, UsersStatus::Pending)
+        .await
+        .unwrap();
+    assert_eq!(count, 0);
+    let count = dao::users::count_by_status(&pool, UsersStatus::Active)
+        .await
+        .unwrap();
+    assert_eq!(count, 1);
+}
+
+#[tokio::test]
+#[serial]
 async fn test_insert_all_batch() {
     let pool = MySqlPool::new(get_db_url()).unwrap();
     clean_all_tables(&pool).await;

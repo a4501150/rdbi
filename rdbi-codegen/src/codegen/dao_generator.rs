@@ -10,8 +10,10 @@ use crate::config::CodegenConfig;
 use crate::parser::{ColumnMetadata, TableMetadata};
 
 use super::naming::{
-    escape_field_name, generate_delete_by_method_name, generate_find_by_list_method_name,
-    generate_find_by_method_name, generate_update_by_method_name, pluralize, to_struct_name,
+    escape_field_name, generate_count_by_method_name, generate_delete_by_method_name,
+    generate_find_by_list_method_name, generate_find_by_method_name,
+    generate_update_by_method_name, generate_update_partial_by_method_name, pluralize,
+    to_struct_name,
 };
 use super::type_resolver::TypeResolver;
 
@@ -165,9 +167,12 @@ fn generate_dao_file(table: &TableMetadata, output_dir: &Path, models_module: &s
         code.push_str(&generate_update_plain_method(table, &column_map));
     }
 
-    // Generate index-aware findBy methods
+    // Generate index-aware findBy methods (sorted so output is deterministic)
     let signatures = collect_method_signatures(table);
-    for sig in signatures.values() {
+    let mut sorted_signatures: Vec<&MethodSignature> = signatures.values().collect();
+    sorted_signatures.sort_by_key(|s| s.method_name.clone());
+
+    for sig in &sorted_signatures {
         // Skip if this is the primary key (already generated separately)
         if sig.source == "PRIMARY_KEY" {
             continue;
@@ -179,6 +184,28 @@ fn generate_dao_file(table: &TableMetadata, output_dir: &Path, models_module: &s
             &struct_name,
             &select_columns,
         ));
+    }
+
+    // Generate partial-update methods (Set struct + update_partial_by_*)
+    if table.primary_key.is_some() {
+        code.push_str(&generate_set_struct(table, &struct_name));
+        for sig in &sorted_signatures {
+            code.push_str(&generate_partial_update_method(
+                table,
+                sig,
+                &column_map,
+                &struct_name,
+            ));
+        }
+    }
+
+    // Generate delete_by / count_by for secondary index signatures
+    for sig in &sorted_signatures {
+        if sig.source == "PRIMARY_KEY" {
+            continue;
+        }
+        code.push_str(&generate_delete_by_method(table, sig, &column_map));
+        code.push_str(&generate_count_by_method(table, sig, &column_map));
     }
 
     // Generate list-based findBy methods for single-column indexes
@@ -696,6 +723,302 @@ Query::new("UPDATE `{table_name}` SET {set_clause} WHERE {where_clause}")
         bind_section_update = bind_section_update,
         bind_section_pk = bind_section_pk,
     )
+}
+
+/// Generate the Set<Struct> partial-update struct for a table: one Option field
+/// per non-primary-key column.
+fn generate_set_struct(table: &TableMetadata, struct_name: &str) -> String {
+    let pk = table.primary_key.as_ref().unwrap();
+    let update_columns: Vec<&ColumnMetadata> = table
+        .columns
+        .iter()
+        .filter(|c| !pk.columns.contains(&c.name))
+        .collect();
+
+    if update_columns.is_empty() {
+        return String::new();
+    }
+
+    let fields: Vec<String> = update_columns
+        .iter()
+        .map(|c| {
+            let rust_type = TypeResolver::resolve(c, &table.name);
+            let inner = rust_type.inner_type().to_type_string();
+            format!(
+                "/// Settable column `{}` (None = leave unchanged)\npub {}: Option<{}>,",
+                c.name,
+                escape_field_name(&c.name),
+                inner
+            )
+        })
+        .collect();
+
+    format!(
+        r#"/// Partial-update column set for `{table_name}`. Only `Some` fields are written by the
+/// `update_partial_by_*` methods; nullable columns cannot be set to NULL this way.
+#[derive(Debug, Default, Clone)]
+pub struct Set{struct_name} {{
+{fields}
+}}
+"#,
+        table_name = table.name,
+        struct_name = struct_name,
+        fields = fields.join("\n"),
+    )
+}
+
+/// Build generated statements that push NULL-aware WHERE conditions into a
+/// `wheres: Vec<String>` local, plus the matching DynamicQuery bind statements.
+fn build_dynamic_where_code(
+    columns: &[String],
+    column_map: &HashMap<&str, &ColumnMetadata>,
+) -> (String, String) {
+    let mut pushes = Vec::new();
+    let mut binds = Vec::new();
+    for col in columns {
+        let col_meta = column_map.get(col.as_str()).unwrap();
+        let field = escape_field_name(col);
+        if col_meta.nullable {
+            pushes.push(format!(
+                "if {field}.is_some() {{ wheres.push(\"`{col}` = ?\".to_string()); }} else {{ wheres.push(\"`{col}` IS NULL\".to_string()); }}",
+            ));
+            binds.push(format!(
+                "if let Some(v) = {field}.as_ref() {{ query = query.bind(v); }}"
+            ));
+        } else {
+            pushes.push(format!("wheres.push(\"`{col}` = ?\".to_string());"));
+            binds.push(format!("query = query.bind({field});"));
+        }
+    }
+    (
+        format!(
+            "let mut wheres: Vec<String> = Vec::new();\n{}",
+            pushes.join("\n")
+        ),
+        binds.join("\n"),
+    )
+}
+
+/// Generate an update_partial_by_<cols> method for one method signature.
+fn generate_partial_update_method(
+    table: &TableMetadata,
+    sig: &MethodSignature,
+    column_map: &HashMap<&str, &ColumnMetadata>,
+    struct_name: &str,
+) -> String {
+    let pk = table.primary_key.as_ref().unwrap();
+    let update_columns: Vec<&ColumnMetadata> = table
+        .columns
+        .iter()
+        .filter(|c| !pk.columns.contains(&c.name))
+        .collect();
+
+    if update_columns.is_empty() {
+        return String::new();
+    }
+
+    let method_name = generate_update_partial_by_method_name(&sig.columns);
+    let where_params = build_params(&sig.columns, column_map, &table.name);
+
+    let set_pushes: Vec<String> = update_columns
+        .iter()
+        .map(|c| {
+            format!(
+                "if set.{field}.is_some() {{ sets.push(\"`{col}` = ?\"); }}",
+                field = escape_field_name(&c.name),
+                col = c.name
+            )
+        })
+        .collect();
+    let set_binds: Vec<String> = update_columns
+        .iter()
+        .map(|c| {
+            format!(
+                "if let Some(v) = set.{field}.as_ref() {{ query = query.bind(v); }}",
+                field = escape_field_name(&c.name)
+            )
+        })
+        .collect();
+
+    let has_nullable = sig.columns.iter().any(|c| {
+        column_map
+            .get(c.as_str())
+            .map(|col| col.nullable)
+            .unwrap_or(false)
+    });
+
+    let body = if has_nullable {
+        let (where_setup, where_binds) = build_dynamic_where_code(&sig.columns, column_map);
+        format!(
+            r#"let mut sets: Vec<&str> = Vec::new();
+{set_pushes}
+if sets.is_empty() {{
+return Ok(0);
+}}
+{where_setup}
+let sql = format!("UPDATE `{table}` SET {{}} WHERE {{}}", sets.join(", "), wheres.join(" AND "));
+let mut query = rdbi::DynamicQuery::new(sql);
+{set_binds}
+{where_binds}
+query.execute(pool).await.map(|r| r.rows_affected)"#,
+            set_pushes = set_pushes.join("\n"),
+            where_setup = where_setup,
+            table = table.name,
+            set_binds = set_binds.join("\n"),
+            where_binds = where_binds,
+        )
+    } else {
+        let where_clause = build_where_clause(&sig.columns);
+        let where_binds: Vec<String> = sig
+            .columns
+            .iter()
+            .map(|c| format!("query = query.bind({});", escape_field_name(c)))
+            .collect();
+        format!(
+            r#"let mut sets: Vec<&str> = Vec::new();
+{set_pushes}
+if sets.is_empty() {{
+return Ok(0);
+}}
+let sql = format!("UPDATE `{table}` SET {{}} WHERE {where_clause}", sets.join(", "));
+let mut query = rdbi::DynamicQuery::new(sql);
+{set_binds}
+{where_binds}
+query.execute(pool).await.map(|r| r.rows_affected)"#,
+            set_pushes = set_pushes.join("\n"),
+            table = table.name,
+            where_clause = where_clause,
+            set_binds = set_binds.join("\n"),
+            where_binds = where_binds.join("\n"),
+        )
+    };
+
+    format!(
+        r#"/// Partial update of `{table_name}` by {source}: writes only the `Some` fields of `set`.
+/// An all-`None` `set` is a no-op returning 0; nullable columns cannot be set to NULL.
+pub async fn {method_name}<P: Pool>(pool: &P, {where_params}, set: Set{struct_name}) -> Result<u64> {{
+{body}
+}}
+"#,
+        table_name = table.name,
+        source = sig.source.to_lowercase().replace('_', " "),
+        method_name = method_name,
+        where_params = where_params,
+        struct_name = struct_name,
+        body = body,
+    )
+}
+
+/// Generate a delete_by method for a secondary index/FK signature.
+fn generate_delete_by_method(
+    table: &TableMetadata,
+    sig: &MethodSignature,
+    column_map: &HashMap<&str, &ColumnMetadata>,
+) -> String {
+    let method_name = generate_delete_by_method_name(&sig.columns);
+    let params = build_params(&sig.columns, column_map, &table.name);
+
+    let has_nullable = sig.columns.iter().any(|c| {
+        column_map
+            .get(c.as_str())
+            .map(|col| col.nullable)
+            .unwrap_or(false)
+    });
+
+    if has_nullable {
+        let (where_setup, where_binds) = build_dynamic_where_code(&sig.columns, column_map);
+        format!(
+            r#"/// Delete rows matched by {source} columns; NULL parameters match `IS NULL`.
+pub async fn {method_name}<P: Pool>(pool: &P, {params}) -> Result<u64> {{
+{where_setup}
+let sql = format!("DELETE FROM `{table_name}` WHERE {{}}", wheres.join(" AND "));
+let mut query = rdbi::DynamicQuery::new(sql);
+{where_binds}
+query.execute(pool).await.map(|r| r.rows_affected)
+}}
+"#,
+            source = sig.source.to_lowercase().replace('_', " "),
+            method_name = method_name,
+            params = params,
+            where_setup = where_setup,
+            table_name = table.name,
+            where_binds = where_binds,
+        )
+    } else {
+        let where_clause = build_where_clause(&sig.columns);
+        let bind_section = generate_bind_section(&sig.columns);
+        format!(
+            r#"/// Delete rows matched by {source} columns.
+pub async fn {method_name}<P: Pool>(pool: &P, {params}) -> Result<u64> {{
+Query::new("DELETE FROM `{table_name}` WHERE {where_clause}")
+{bind_section}
+.execute(pool).await.map(|r| r.rows_affected)
+}}
+"#,
+            source = sig.source.to_lowercase().replace('_', " "),
+            method_name = method_name,
+            params = params,
+            table_name = table.name,
+            where_clause = where_clause,
+            bind_section = bind_section,
+        )
+    }
+}
+
+/// Generate a count_by method for a secondary index/FK signature.
+fn generate_count_by_method(
+    table: &TableMetadata,
+    sig: &MethodSignature,
+    column_map: &HashMap<&str, &ColumnMetadata>,
+) -> String {
+    let method_name = generate_count_by_method_name(&sig.columns);
+    let params = build_params(&sig.columns, column_map, &table.name);
+
+    let has_nullable = sig.columns.iter().any(|c| {
+        column_map
+            .get(c.as_str())
+            .map(|col| col.nullable)
+            .unwrap_or(false)
+    });
+
+    if has_nullable {
+        let (where_setup, where_binds) = build_dynamic_where_code(&sig.columns, column_map);
+        format!(
+            r#"/// Count rows matched by {source} columns; NULL parameters match `IS NULL`.
+pub async fn {method_name}<P: Pool>(pool: &P, {params}) -> Result<i64> {{
+{where_setup}
+let sql = format!("SELECT COUNT(*) FROM `{table_name}` WHERE {{}}", wheres.join(" AND "));
+let mut query = rdbi::DynamicQuery::new(sql);
+{where_binds}
+query.fetch_scalar(pool).await
+}}
+"#,
+            source = sig.source.to_lowercase().replace('_', " "),
+            method_name = method_name,
+            params = params,
+            where_setup = where_setup,
+            table_name = table.name,
+            where_binds = where_binds,
+        )
+    } else {
+        let where_clause = build_where_clause(&sig.columns);
+        let bind_section = generate_bind_section(&sig.columns);
+        format!(
+            r#"/// Count rows matched by {source} columns.
+pub async fn {method_name}<P: Pool>(pool: &P, {params}) -> Result<i64> {{
+Query::new("SELECT COUNT(*) FROM `{table_name}` WHERE {where_clause}")
+{bind_section}
+.fetch_scalar(pool).await
+}}
+"#,
+            source = sig.source.to_lowercase().replace('_', " "),
+            method_name = method_name,
+            params = params,
+            table_name = table.name,
+            where_clause = where_clause,
+            bind_section = bind_section,
+        )
+    }
 }
 
 /// Collect method signatures with priority-based deduplication
@@ -1352,6 +1675,79 @@ mod tests {
         assert!(code.contains("pub async fn insert_all"));
         // Should use BatchInsert
         assert!(code.contains("rdbi::BatchInsert::new"));
+    }
+
+    fn make_column_map(table: &TableMetadata) -> HashMap<&str, &ColumnMetadata> {
+        table.columns.iter().map(|c| (c.name.as_str(), c)).collect()
+    }
+
+    #[test]
+    fn test_generate_set_struct() {
+        let table = make_table();
+        let code = generate_set_struct(&table, "Users");
+
+        assert!(code.contains("pub struct SetUsers"));
+        assert!(code.contains("pub email: Option<String>,"));
+        assert!(code.contains("pub status: Option<UsersStatus>,"));
+        // Primary key columns are not settable
+        assert!(!code.contains("pub id:"));
+    }
+
+    #[test]
+    fn test_generate_partial_update_method_pk() {
+        let table = make_table();
+        let column_map = make_column_map(&table);
+        let sig = MethodSignature::new(
+            vec!["id".to_string()],
+            PRIORITY_PRIMARY_KEY,
+            true,
+            "PRIMARY_KEY",
+        );
+        let code = generate_partial_update_method(&table, &sig, &column_map, "Users");
+
+        assert!(code.contains(
+            "pub async fn update_partial_by_id<P: Pool>(pool: &P, id: i64, set: SetUsers)"
+        ));
+        assert!(code.contains("UPDATE `users` SET {} WHERE `id` = ?"));
+        assert!(code.contains("if sets.is_empty()"));
+        assert!(code.contains("if let Some(v) = set.email.as_ref()"));
+    }
+
+    #[test]
+    fn test_generate_partial_update_method_nullable_where() {
+        let mut table = make_table();
+        table.columns[1].nullable = true; // email
+        let column_map = make_column_map(&table);
+        let sig = MethodSignature::new(
+            vec!["email".to_string()],
+            PRIORITY_UNIQUE_INDEX,
+            true,
+            "UNIQUE_INDEX",
+        );
+        let code = generate_partial_update_method(&table, &sig, &column_map, "Users");
+
+        assert!(code.contains("UPDATE `users` SET {} WHERE {}"));
+        assert!(code.contains("`email` IS NULL"));
+    }
+
+    #[test]
+    fn test_generate_delete_and_count_by_index() {
+        let table = make_table();
+        let column_map = make_column_map(&table);
+        let sig = MethodSignature::new(
+            vec!["status".to_string()],
+            PRIORITY_NON_UNIQUE_INDEX,
+            false,
+            "NON_UNIQUE_INDEX",
+        );
+
+        let del = generate_delete_by_method(&table, &sig, &column_map);
+        assert!(del.contains("pub async fn delete_by_status"));
+        assert!(del.contains("DELETE FROM `users` WHERE `status` = ?"));
+
+        let cnt = generate_count_by_method(&table, &sig, &column_map);
+        assert!(cnt.contains("pub async fn count_by_status"));
+        assert!(cnt.contains("SELECT COUNT(*) FROM `users` WHERE `status` = ?"));
     }
 
     #[test]
