@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/a4501150/rdbi/compare/rdbi-codegen-v0.3.7...rdbi-codegen-v0.4.0) (2026-10-14)
+
+
+### Features
+
+* emit partial-update, count_by and delete_by DAO methods ([8bd879e](https://github.com/a4501150/rdbi/commit/8bd879e05cb19f469ca3499af134b3c2247954fb))
+
 ## [0.3.7](https://github.com/a4501150/rdbi/compare/rdbi-codegen-v0.3.6...rdbi-codegen-v0.3.7) (2026-03-20)
 
 
