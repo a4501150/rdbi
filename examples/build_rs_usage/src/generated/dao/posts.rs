@@ -107,16 +107,198 @@ pub async fn update_by_id<P: Pool>(
 .execute(pool).await.map(|r| r.rows_affected)
 }
 /// Find by non unique index: returns Vec (non-unique)
+pub async fn find_by_published<P: Pool>(pool: &P, published: bool) -> Result<Vec<Posts>> {
+    Query::new("SELECT `id`, `user_id`, `title`, `content`, `published`, `created_at` FROM `posts` WHERE `published` = ?")
+.bind(published)
+.fetch_all(pool).await
+}
+/// Find by non unique index: returns Vec (non-unique)
 pub async fn find_by_user_id<P: Pool>(pool: &P, user_id: i64) -> Result<Vec<Posts>> {
     Query::new("SELECT `id`, `user_id`, `title`, `content`, `published`, `created_at` FROM `posts` WHERE `user_id` = ?")
 .bind(user_id)
 .fetch_all(pool).await
 }
-/// Find by non unique index: returns Vec (non-unique)
-pub async fn find_by_published<P: Pool>(pool: &P, published: bool) -> Result<Vec<Posts>> {
-    Query::new("SELECT `id`, `user_id`, `title`, `content`, `published`, `created_at` FROM `posts` WHERE `published` = ?")
-.bind(published)
-.fetch_all(pool).await
+/// Partial-update column set for `posts`. Only `Some` fields are written by the
+/// `update_partial_by_*` methods; nullable columns cannot be set to NULL this way.
+#[derive(Debug, Default, Clone)]
+pub struct SetPosts {
+    /// Settable column `user_id` (None = leave unchanged)
+    pub user_id: Option<i64>,
+    /// Settable column `title` (None = leave unchanged)
+    pub title: Option<String>,
+    /// Settable column `content` (None = leave unchanged)
+    pub content: Option<String>,
+    /// Settable column `published` (None = leave unchanged)
+    pub published: Option<bool>,
+    /// Settable column `created_at` (None = leave unchanged)
+    pub created_at: Option<chrono::NaiveDateTime>,
+}
+/// Partial update of `posts` by primary key: writes only the `Some` fields of `set`.
+/// An all-`None` `set` is a no-op returning 0; nullable columns cannot be set to NULL.
+pub async fn update_partial_by_id<P: Pool>(pool: &P, id: i64, set: SetPosts) -> Result<u64> {
+    let mut sets: Vec<&str> = Vec::new();
+    if set.user_id.is_some() {
+        sets.push("`user_id` = ?");
+    }
+    if set.title.is_some() {
+        sets.push("`title` = ?");
+    }
+    if set.content.is_some() {
+        sets.push("`content` = ?");
+    }
+    if set.published.is_some() {
+        sets.push("`published` = ?");
+    }
+    if set.created_at.is_some() {
+        sets.push("`created_at` = ?");
+    }
+    if sets.is_empty() {
+        return Ok(0);
+    }
+    let sql = format!("UPDATE `posts` SET {} WHERE `id` = ?", sets.join(", "));
+    let mut query = rdbi::DynamicQuery::new(sql);
+    if let Some(v) = set.user_id.as_ref() {
+        query = query.bind(v);
+    }
+    if let Some(v) = set.title.as_ref() {
+        query = query.bind(v);
+    }
+    if let Some(v) = set.content.as_ref() {
+        query = query.bind(v);
+    }
+    if let Some(v) = set.published.as_ref() {
+        query = query.bind(v);
+    }
+    if let Some(v) = set.created_at.as_ref() {
+        query = query.bind(v);
+    }
+    query = query.bind(id);
+    query.execute(pool).await.map(|r| r.rows_affected)
+}
+/// Partial update of `posts` by non unique index: writes only the `Some` fields of `set`.
+/// An all-`None` `set` is a no-op returning 0; nullable columns cannot be set to NULL.
+pub async fn update_partial_by_published<P: Pool>(
+    pool: &P,
+    published: bool,
+    set: SetPosts,
+) -> Result<u64> {
+    let mut sets: Vec<&str> = Vec::new();
+    if set.user_id.is_some() {
+        sets.push("`user_id` = ?");
+    }
+    if set.title.is_some() {
+        sets.push("`title` = ?");
+    }
+    if set.content.is_some() {
+        sets.push("`content` = ?");
+    }
+    if set.published.is_some() {
+        sets.push("`published` = ?");
+    }
+    if set.created_at.is_some() {
+        sets.push("`created_at` = ?");
+    }
+    if sets.is_empty() {
+        return Ok(0);
+    }
+    let sql = format!(
+        "UPDATE `posts` SET {} WHERE `published` = ?",
+        sets.join(", ")
+    );
+    let mut query = rdbi::DynamicQuery::new(sql);
+    if let Some(v) = set.user_id.as_ref() {
+        query = query.bind(v);
+    }
+    if let Some(v) = set.title.as_ref() {
+        query = query.bind(v);
+    }
+    if let Some(v) = set.content.as_ref() {
+        query = query.bind(v);
+    }
+    if let Some(v) = set.published.as_ref() {
+        query = query.bind(v);
+    }
+    if let Some(v) = set.created_at.as_ref() {
+        query = query.bind(v);
+    }
+    query = query.bind(published);
+    query.execute(pool).await.map(|r| r.rows_affected)
+}
+/// Partial update of `posts` by non unique index: writes only the `Some` fields of `set`.
+/// An all-`None` `set` is a no-op returning 0; nullable columns cannot be set to NULL.
+pub async fn update_partial_by_user_id<P: Pool>(
+    pool: &P,
+    user_id: i64,
+    set: SetPosts,
+) -> Result<u64> {
+    let mut sets: Vec<&str> = Vec::new();
+    if set.user_id.is_some() {
+        sets.push("`user_id` = ?");
+    }
+    if set.title.is_some() {
+        sets.push("`title` = ?");
+    }
+    if set.content.is_some() {
+        sets.push("`content` = ?");
+    }
+    if set.published.is_some() {
+        sets.push("`published` = ?");
+    }
+    if set.created_at.is_some() {
+        sets.push("`created_at` = ?");
+    }
+    if sets.is_empty() {
+        return Ok(0);
+    }
+    let sql = format!("UPDATE `posts` SET {} WHERE `user_id` = ?", sets.join(", "));
+    let mut query = rdbi::DynamicQuery::new(sql);
+    if let Some(v) = set.user_id.as_ref() {
+        query = query.bind(v);
+    }
+    if let Some(v) = set.title.as_ref() {
+        query = query.bind(v);
+    }
+    if let Some(v) = set.content.as_ref() {
+        query = query.bind(v);
+    }
+    if let Some(v) = set.published.as_ref() {
+        query = query.bind(v);
+    }
+    if let Some(v) = set.created_at.as_ref() {
+        query = query.bind(v);
+    }
+    query = query.bind(user_id);
+    query.execute(pool).await.map(|r| r.rows_affected)
+}
+/// Delete rows matched by non unique index columns.
+pub async fn delete_by_published<P: Pool>(pool: &P, published: bool) -> Result<u64> {
+    Query::new("DELETE FROM `posts` WHERE `published` = ?")
+        .bind(published)
+        .execute(pool)
+        .await
+        .map(|r| r.rows_affected)
+}
+/// Count rows matched by non unique index columns.
+pub async fn count_by_published<P: Pool>(pool: &P, published: bool) -> Result<i64> {
+    Query::new("SELECT COUNT(*) FROM `posts` WHERE `published` = ?")
+        .bind(published)
+        .fetch_scalar(pool)
+        .await
+}
+/// Delete rows matched by non unique index columns.
+pub async fn delete_by_user_id<P: Pool>(pool: &P, user_id: i64) -> Result<u64> {
+    Query::new("DELETE FROM `posts` WHERE `user_id` = ?")
+        .bind(user_id)
+        .execute(pool)
+        .await
+        .map(|r| r.rows_affected)
+}
+/// Count rows matched by non unique index columns.
+pub async fn count_by_user_id<P: Pool>(pool: &P, user_id: i64) -> Result<i64> {
+    Query::new("SELECT COUNT(*) FROM `posts` WHERE `user_id` = ?")
+        .bind(user_id)
+        .fetch_scalar(pool)
+        .await
 }
 /// Find by list of ids (IN clause)
 pub async fn find_by_ids<P: Pool>(pool: &P, ids: &[i64]) -> Result<Vec<Posts>> {
@@ -190,4 +372,120 @@ pub async fn get_paginated_result<P: Pool>(
         current_page,
         page_size,
     ))
+}
+
+// ---- Edges ----
+
+use crate::generated::models::Users;
+
+impl Posts {
+    /// Point this row's edge at another target row.
+    pub async fn attach_user<P: Pool>(&self, pool: &P, id: &i64) -> Result<u64> {
+        rdbi::Query::new("UPDATE `posts` SET `user_id` = ? WHERE `id` = ?")
+            .bind(&id)
+            .bind(&self.id)
+            .execute(pool)
+            .await
+            .map(|r| r.rows_affected)
+    }
+
+    /// Follows this edge to its target row.
+    pub async fn user<P: Pool>(&self, pool: &P) -> Result<Users> {
+        rdbi::Query::new("SELECT `id`, `username`, `email`, `status`, `created_at` FROM `users` WHERE `id` = ? LIMIT 1").bind(&self.user_id).fetch_one(pool).await
+    }
+}
+
+// ---- Builder ----
+
+/// Create builder for `posts` with edge and link support.
+pub struct NewPosts {
+    title: String,
+    content: Option<String>,
+    published: Option<bool>,
+    created_at: Option<::chrono::NaiveDateTime>,
+    user_id: Option<i64>,
+}
+
+impl NewPosts {
+    /// Start a builder with every NOT NULL column without a default.
+    pub fn new(title: String) -> Self {
+        Self {
+            title: title,
+            content: None,
+            published: None,
+            created_at: None,
+            user_id: None,
+        }
+    }
+    /// Set this column explicitly.
+    pub fn title(mut self, v: String) -> Self {
+        self.title = v;
+        self
+    }
+    /// Set this column explicitly.
+    pub fn content(mut self, v: String) -> Self {
+        self.content = Some(v);
+        self
+    }
+    /// Set this column explicitly.
+    pub fn published(mut self, v: bool) -> Self {
+        self.published = Some(v);
+        self
+    }
+    /// Set this column explicitly.
+    pub fn created_at(mut self, v: ::chrono::NaiveDateTime) -> Self {
+        self.created_at = Some(v);
+        self
+    }
+    /// Set this edge's foreign key directly.
+    pub fn user_id(mut self, v: i64) -> Self {
+        self.user_id = Some(v);
+        self
+    }
+    /// Point this edge at a target row (copies its key).
+    pub fn user(mut self, target: &Users) -> Self {
+        self.user_id = Some(target.id.clone());
+        self
+    }
+    /// Insert the row (columns left unset fall back to their DB defaults).
+    pub async fn save<P: rdbi::Pool>(self, pool: &P) -> Result<u64> {
+        let Self {
+            content,
+            created_at,
+            published,
+            title,
+            user_id,
+        } = self;
+        let mut cols: Vec<&str> = Vec::new();
+        let mut params: Vec<rdbi::Value> = Vec::new();
+        cols.push("`title`");
+        params.push(rdbi::ToValue::to_value(&title));
+        if let Some(v) = &content {
+            cols.push("`content`");
+            params.push(rdbi::ToValue::to_value(v));
+        }
+        if let Some(v) = &published {
+            cols.push("`published`");
+            params.push(rdbi::ToValue::to_value(v));
+        }
+        if let Some(v) = &created_at {
+            cols.push("`created_at`");
+            params.push(rdbi::ToValue::to_value(v));
+        }
+        let user_id =
+            user_id.ok_or_else(|| rdbi::Error::UnexpectedNull("posts.user_id".to_string()))?;
+        cols.push("`user_id`");
+        params.push(rdbi::ToValue::to_value(&user_id));
+        let __sql = format!(
+            "INSERT INTO `posts` ({}) VALUES ({})",
+            cols.join(", "),
+            vec!["?"; cols.len()].join(", ")
+        );
+        let __res = rdbi::DynamicQuery::new(__sql)
+            .bind_all(&params)
+            .execute(pool)
+            .await
+            .map(|r| r.last_insert_id.unwrap_or(r.rows_affected));
+        __res
+    }
 }

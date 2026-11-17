@@ -112,6 +112,15 @@ pub async fn update_by_id<P: Pool>(
 .execute(pool).await.map(|r| r.rows_affected)
 }
 /// Find by non unique index: returns Vec (non-unique)
+pub async fn find_by_email<P: Pool>(pool: &P, email: &str) -> Result<Vec<Users>> {
+    Query::new(
+        "SELECT `id`, `username`, `email`, `status`, `created_at` FROM `users` WHERE `email` = ?",
+    )
+    .bind(email)
+    .fetch_all(pool)
+    .await
+}
+/// Find by non unique index: returns Vec (non-unique)
 pub async fn find_by_status<P: Pool>(pool: &P, status: UsersStatus) -> Result<Vec<Users>> {
     Query::new(
         "SELECT `id`, `username`, `email`, `status`, `created_at` FROM `users` WHERE `status` = ?",
@@ -126,14 +135,218 @@ pub async fn find_by_username<P: Pool>(pool: &P, username: &str) -> Result<Optio
 .bind(username)
 .fetch_optional(pool).await
 }
-/// Find by non unique index: returns Vec (non-unique)
-pub async fn find_by_email<P: Pool>(pool: &P, email: &str) -> Result<Vec<Users>> {
-    Query::new(
-        "SELECT `id`, `username`, `email`, `status`, `created_at` FROM `users` WHERE `email` = ?",
-    )
-    .bind(email)
-    .fetch_all(pool)
-    .await
+/// Partial-update column set for `users`. Only `Some` fields are written by the
+/// `update_partial_by_*` methods; nullable columns cannot be set to NULL this way.
+#[derive(Debug, Default, Clone)]
+pub struct SetUsers {
+    /// Settable column `username` (None = leave unchanged)
+    pub username: Option<String>,
+    /// Settable column `email` (None = leave unchanged)
+    pub email: Option<String>,
+    /// Settable column `status` (None = leave unchanged)
+    pub status: Option<UsersStatus>,
+    /// Settable column `created_at` (None = leave unchanged)
+    pub created_at: Option<chrono::NaiveDateTime>,
+}
+/// Partial update of `users` by non unique index: writes only the `Some` fields of `set`.
+/// An all-`None` `set` is a no-op returning 0; nullable columns cannot be set to NULL.
+pub async fn update_partial_by_email<P: Pool>(pool: &P, email: &str, set: SetUsers) -> Result<u64> {
+    let mut sets: Vec<&str> = Vec::new();
+    if set.username.is_some() {
+        sets.push("`username` = ?");
+    }
+    if set.email.is_some() {
+        sets.push("`email` = ?");
+    }
+    if set.status.is_some() {
+        sets.push("`status` = ?");
+    }
+    if set.created_at.is_some() {
+        sets.push("`created_at` = ?");
+    }
+    if sets.is_empty() {
+        return Ok(0);
+    }
+    let sql = format!("UPDATE `users` SET {} WHERE `email` = ?", sets.join(", "));
+    let mut query = rdbi::DynamicQuery::new(sql);
+    if let Some(v) = set.username.as_ref() {
+        query = query.bind(v);
+    }
+    if let Some(v) = set.email.as_ref() {
+        query = query.bind(v);
+    }
+    if let Some(v) = set.status.as_ref() {
+        query = query.bind(v);
+    }
+    if let Some(v) = set.created_at.as_ref() {
+        query = query.bind(v);
+    }
+    query = query.bind(email);
+    query.execute(pool).await.map(|r| r.rows_affected)
+}
+/// Partial update of `users` by primary key: writes only the `Some` fields of `set`.
+/// An all-`None` `set` is a no-op returning 0; nullable columns cannot be set to NULL.
+pub async fn update_partial_by_id<P: Pool>(pool: &P, id: i64, set: SetUsers) -> Result<u64> {
+    let mut sets: Vec<&str> = Vec::new();
+    if set.username.is_some() {
+        sets.push("`username` = ?");
+    }
+    if set.email.is_some() {
+        sets.push("`email` = ?");
+    }
+    if set.status.is_some() {
+        sets.push("`status` = ?");
+    }
+    if set.created_at.is_some() {
+        sets.push("`created_at` = ?");
+    }
+    if sets.is_empty() {
+        return Ok(0);
+    }
+    let sql = format!("UPDATE `users` SET {} WHERE `id` = ?", sets.join(", "));
+    let mut query = rdbi::DynamicQuery::new(sql);
+    if let Some(v) = set.username.as_ref() {
+        query = query.bind(v);
+    }
+    if let Some(v) = set.email.as_ref() {
+        query = query.bind(v);
+    }
+    if let Some(v) = set.status.as_ref() {
+        query = query.bind(v);
+    }
+    if let Some(v) = set.created_at.as_ref() {
+        query = query.bind(v);
+    }
+    query = query.bind(id);
+    query.execute(pool).await.map(|r| r.rows_affected)
+}
+/// Partial update of `users` by non unique index: writes only the `Some` fields of `set`.
+/// An all-`None` `set` is a no-op returning 0; nullable columns cannot be set to NULL.
+pub async fn update_partial_by_status<P: Pool>(
+    pool: &P,
+    status: UsersStatus,
+    set: SetUsers,
+) -> Result<u64> {
+    let mut sets: Vec<&str> = Vec::new();
+    if set.username.is_some() {
+        sets.push("`username` = ?");
+    }
+    if set.email.is_some() {
+        sets.push("`email` = ?");
+    }
+    if set.status.is_some() {
+        sets.push("`status` = ?");
+    }
+    if set.created_at.is_some() {
+        sets.push("`created_at` = ?");
+    }
+    if sets.is_empty() {
+        return Ok(0);
+    }
+    let sql = format!("UPDATE `users` SET {} WHERE `status` = ?", sets.join(", "));
+    let mut query = rdbi::DynamicQuery::new(sql);
+    if let Some(v) = set.username.as_ref() {
+        query = query.bind(v);
+    }
+    if let Some(v) = set.email.as_ref() {
+        query = query.bind(v);
+    }
+    if let Some(v) = set.status.as_ref() {
+        query = query.bind(v);
+    }
+    if let Some(v) = set.created_at.as_ref() {
+        query = query.bind(v);
+    }
+    query = query.bind(status);
+    query.execute(pool).await.map(|r| r.rows_affected)
+}
+/// Partial update of `users` by unique index: writes only the `Some` fields of `set`.
+/// An all-`None` `set` is a no-op returning 0; nullable columns cannot be set to NULL.
+pub async fn update_partial_by_username<P: Pool>(
+    pool: &P,
+    username: &str,
+    set: SetUsers,
+) -> Result<u64> {
+    let mut sets: Vec<&str> = Vec::new();
+    if set.username.is_some() {
+        sets.push("`username` = ?");
+    }
+    if set.email.is_some() {
+        sets.push("`email` = ?");
+    }
+    if set.status.is_some() {
+        sets.push("`status` = ?");
+    }
+    if set.created_at.is_some() {
+        sets.push("`created_at` = ?");
+    }
+    if sets.is_empty() {
+        return Ok(0);
+    }
+    let sql = format!(
+        "UPDATE `users` SET {} WHERE `username` = ?",
+        sets.join(", ")
+    );
+    let mut query = rdbi::DynamicQuery::new(sql);
+    if let Some(v) = set.username.as_ref() {
+        query = query.bind(v);
+    }
+    if let Some(v) = set.email.as_ref() {
+        query = query.bind(v);
+    }
+    if let Some(v) = set.status.as_ref() {
+        query = query.bind(v);
+    }
+    if let Some(v) = set.created_at.as_ref() {
+        query = query.bind(v);
+    }
+    query = query.bind(username);
+    query.execute(pool).await.map(|r| r.rows_affected)
+}
+/// Delete rows matched by non unique index columns.
+pub async fn delete_by_email<P: Pool>(pool: &P, email: &str) -> Result<u64> {
+    Query::new("DELETE FROM `users` WHERE `email` = ?")
+        .bind(email)
+        .execute(pool)
+        .await
+        .map(|r| r.rows_affected)
+}
+/// Count rows matched by non unique index columns.
+pub async fn count_by_email<P: Pool>(pool: &P, email: &str) -> Result<i64> {
+    Query::new("SELECT COUNT(*) FROM `users` WHERE `email` = ?")
+        .bind(email)
+        .fetch_scalar(pool)
+        .await
+}
+/// Delete rows matched by non unique index columns.
+pub async fn delete_by_status<P: Pool>(pool: &P, status: UsersStatus) -> Result<u64> {
+    Query::new("DELETE FROM `users` WHERE `status` = ?")
+        .bind(status)
+        .execute(pool)
+        .await
+        .map(|r| r.rows_affected)
+}
+/// Count rows matched by non unique index columns.
+pub async fn count_by_status<P: Pool>(pool: &P, status: UsersStatus) -> Result<i64> {
+    Query::new("SELECT COUNT(*) FROM `users` WHERE `status` = ?")
+        .bind(status)
+        .fetch_scalar(pool)
+        .await
+}
+/// Delete rows matched by unique index columns.
+pub async fn delete_by_username<P: Pool>(pool: &P, username: &str) -> Result<u64> {
+    Query::new("DELETE FROM `users` WHERE `username` = ?")
+        .bind(username)
+        .execute(pool)
+        .await
+        .map(|r| r.rows_affected)
+}
+/// Count rows matched by unique index columns.
+pub async fn count_by_username<P: Pool>(pool: &P, username: &str) -> Result<i64> {
+    Query::new("SELECT COUNT(*) FROM `users` WHERE `username` = ?")
+        .bind(username)
+        .fetch_scalar(pool)
+        .await
 }
 /// Find by list of ids (IN clause)
 pub async fn find_by_ids<P: Pool>(pool: &P, ids: &[i64]) -> Result<Vec<Users>> {
@@ -222,4 +435,21 @@ pub async fn get_paginated_result<P: Pool>(
         current_page,
         page_size,
     ))
+}
+
+// ---- Edges ----
+
+use crate::generated::models::Posts;
+
+impl Users {
+    /// Insert a child row with this edge already set.
+    pub async fn create_post<P: Pool>(&self, pool: &P, entity: &mut Posts) -> Result<u64> {
+        entity.user_id = self.id.clone();
+        crate::generated::dao::posts::insert(pool, entity).await
+    }
+
+    /// Rows on the other side of another table's edge.
+    pub async fn posts<P: Pool>(&self, pool: &P) -> Result<Vec<Posts>> {
+        rdbi::Query::new("SELECT `id`, `user_id`, `title`, `content`, `published`, `created_at` FROM `posts` WHERE `user_id` = ?").bind(&self.id).fetch_all(pool).await
+    }
 }

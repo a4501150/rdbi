@@ -4,8 +4,8 @@
 //! The generated files should be committed to version control.
 
 mod generated {
-    pub mod models;
     pub mod dao;
+    pub mod models;
 }
 
 pub use generated::models::*;

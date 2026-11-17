@@ -42,6 +42,10 @@ rdbi-codegen      (independent, no runtime dep on rdbi)
 - **Enum values** are `EnumMember::Name(String)`, not plain `String`.
 - **Nullable FK columns** — the DAO generator handles `find_by_` methods for nullable FK columns using `IS NULL` when the parameter is `None`. See `dao_generator.rs` `generate_find_by_method_nullable`.
 - **Index deduplication** — when the same column appears in multiple index types (PK, unique, non-unique, FK), methods are deduplicated by priority: PK > Unique > Non-Unique > FK.
+- **Edges are name-resolved at parse time, not emit time** — `resolve_edges` in `schema_parser.rs` assigns every method name (with collision fallbacks: target singular → source column minus `_id` → `{col}_{target}` → `name=` override). Emission (`edge_generator.rs`, `builder_generator.rs`) never renames; golden test `rdbi-codegen/tests/edge_golden.rs` pins the output, regenerate with `RDBI_GOLDEN_UPDATE=1 cargo test -p rdbi-codegen`.
+- **Link-table detection is by PK shape** — a table whose entire 2-column PK is exactly its two edge columns (each targeting the other table's PK) becomes a many-to-many link table and emits no edge methods itself. Comment-directive columns and FK-derived columns are interchangeable here.
+- **Column-comment directives may contain `;` between directives** — anything that naively splits `.sql` files on `;` (like the test-container schema loader) must be quote-aware; `split_statements` in `rdbi-tests` does this.
+- **Edge/builder emission skips filtered tables** — if `include_tables`/`exclude_tables` drops an edge's far side, the edge is not emitted (no panic); see the prune step in `edge_generator::generate_edges`.
 
 ## Transaction macros and patterns
 

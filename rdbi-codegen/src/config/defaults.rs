@@ -26,3 +26,9 @@ pub const DAO_MODULE: &str = "dao";
 
 /// Whether to run in dry-run mode by default
 pub const DRY_RUN: bool = false;
+
+/// Whether edge methods are emitted by default
+pub const EDGES_ENABLED: bool = true;
+
+/// Whether FOREIGN KEY constraints become edges by default
+pub const EDGES_AUTO_FROM_FOREIGN_KEYS: bool = true;

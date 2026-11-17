@@ -7,6 +7,28 @@ use std::path::{Path, PathBuf};
 use super::defaults;
 use crate::error::{CodegenError, Result};
 
+/// Edge generation options
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EdgesConfig {
+    /// Emit edge methods and builders at all
+    #[serde(default = "default_edges_enabled")]
+    pub enabled: bool,
+
+    /// Derive edges from FOREIGN KEY constraints (comment directives always
+    /// work, with or without this flag)
+    #[serde(default = "default_edges_auto_from_foreign_keys")]
+    pub auto_from_foreign_keys: bool,
+}
+
+impl Default for EdgesConfig {
+    fn default() -> Self {
+        Self {
+            enabled: defaults::EDGES_ENABLED,
+            auto_from_foreign_keys: defaults::EDGES_AUTO_FROM_FOREIGN_KEYS,
+        }
+    }
+}
+
 /// Main configuration struct for code generation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CodegenConfig {
@@ -54,6 +76,10 @@ pub struct CodegenConfig {
     /// Can be overridden by RUST_LOG env var
     #[serde(default)]
     pub log_level: Option<String>,
+
+    /// Edge generation options
+    #[serde(default)]
+    pub edges: EdgesConfig,
 }
 
 // Default value functions for serde
@@ -84,6 +110,12 @@ fn default_dao_module() -> String {
 fn default_dry_run() -> bool {
     defaults::DRY_RUN
 }
+fn default_edges_enabled() -> bool {
+    defaults::EDGES_ENABLED
+}
+fn default_edges_auto_from_foreign_keys() -> bool {
+    defaults::EDGES_AUTO_FROM_FOREIGN_KEYS
+}
 
 impl Default for CodegenConfig {
     fn default() -> Self {
@@ -99,6 +131,7 @@ impl Default for CodegenConfig {
             dao_module: default_dao_module(),
             dry_run: default_dry_run(),
             log_level: None,
+            edges: EdgesConfig::default(),
         }
     }
 }

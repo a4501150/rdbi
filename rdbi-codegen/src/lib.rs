@@ -73,7 +73,12 @@ pub use error::{CodegenError, Result};
 pub fn generate(config: &CodegenConfig) -> Result<()> {
     info!("Parsing schema: {:?}", config.schema_file);
     let schema_sql = std::fs::read_to_string(&config.schema_file)?;
-    let tables = parser::parse_schema(&schema_sql)?;
+    let tables = parser::parse_schema_with_edges(
+        &schema_sql,
+        &parser::EdgeOptions {
+            auto_from_foreign_keys: config.edges.auto_from_foreign_keys,
+        },
+    )?;
     info!("Found {} tables", tables.len());
 
     let tables = filter_tables(tables, &config.include_tables, &config.exclude_tables);
@@ -179,6 +184,18 @@ impl CodegenBuilder {
         self
     }
 
+    /// Enable or disable emission of edge methods and builders
+    pub fn edges_enabled(mut self, enabled: bool) -> Self {
+        self.config.edges.enabled = enabled;
+        self
+    }
+
+    /// Whether FOREIGN KEY constraints also become edges
+    pub fn edges_auto_from_foreign_keys(mut self, auto: bool) -> Self {
+        self.config.edges.auto_from_foreign_keys = auto;
+        self
+    }
+
     /// Set the output directory for structs only
     pub fn output_structs_dir(mut self, dir: impl AsRef<Path>) -> Self {
         self.config.output_structs_dir = dir.as_ref().to_path_buf();
@@ -264,6 +281,19 @@ struct CargoMetadataConfig {
 
     /// Output directory for generated DAOs
     output_dao_dir: Option<String>,
+
+    /// Edge generation options (`[package.metadata.rdbi-codegen.edges]`)
+    #[serde(default)]
+    edges: Option<CargoMetadataEdges>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+struct CargoMetadataEdges {
+    /// Emit edge methods and builders (default: true)
+    enabled: Option<bool>,
+
+    /// Derive edges from FOREIGN KEY constraints (default: true)
+    auto_from_foreign_keys: Option<bool>,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -400,6 +430,16 @@ pub fn generate_from_cargo_metadata() -> Result<()> {
     }
     if let Some(false) = metadata_config.generate_dao {
         builder = builder.structs_only();
+    }
+
+    // Apply edge options
+    if let Some(edges) = &metadata_config.edges {
+        if let Some(enabled) = edges.enabled {
+            builder = builder.edges_enabled(enabled);
+        }
+        if let Some(auto) = edges.auto_from_foreign_keys {
+            builder = builder.edges_auto_from_foreign_keys(auto);
+        }
     }
 
     // Emit rerun-if-changed

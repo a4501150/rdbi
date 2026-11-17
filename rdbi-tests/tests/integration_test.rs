@@ -71,7 +71,7 @@ fn setup_container() {
             // Run schema
             let pool = MySqlPool::new(&url).unwrap();
             let schema = include_str!("../../examples/example-schema.sql");
-            for stmt in schema.split(';').filter(|s| !s.trim().is_empty()) {
+            for stmt in split_statements(schema).filter(|s| !s.trim().is_empty()) {
                 let stmt = stmt.trim();
                 if !stmt.is_empty() {
                     Query::new(stmt).execute(&pool).await.unwrap();
@@ -103,8 +103,41 @@ fn get_db_url() -> &'static str {
     DB_URL.get().expect("Container not initialized")
 }
 
+/// Split SQL on `;` outside of single-quoted strings (column comments may
+/// contain `;`, e.g. rdbi edge directives).
+fn split_statements(sql: &str) -> impl Iterator<Item = &str> {
+    let mut in_str = false;
+    let mut start = 0;
+    let mut parts: Vec<&str> = Vec::new();
+    let bytes = sql.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        let c = bytes[i];
+        if in_str {
+            if c == b'\'' {
+                if i + 1 < bytes.len() && bytes[i + 1] == b'\'' {
+                    i += 1; // escaped quote
+                } else {
+                    in_str = false;
+                }
+            }
+        } else if c == b'\'' {
+            in_str = true;
+        } else if c == b';' {
+            parts.push(&sql[start..i]);
+            start = i + 1;
+        }
+        i += 1;
+    }
+    parts.push(&sql[start..]);
+    parts.into_iter()
+}
+
 // All tables in reverse dependency order for cleanup
 const ALL_TABLES: &[&str] = &[
+    "product_reviews",
+    "product_tags",
+    "tags",
     "order_item_details",
     "multi_index_table",
     "boolean_table",
@@ -2304,4 +2337,252 @@ mod no_trait_import_test {
 
         assert_eq!(result.unwrap(), 0);
     }
+}
+
+// ============ Edge Tests ============
+
+fn sample_user(username: &str) -> Users {
+    Users {
+        id: 0,
+        username: username.to_string(),
+        email: format!("{username}@example.com"),
+        first_name: None,
+        last_name: None,
+        status: UsersStatus::Active,
+        is_active: true,
+        age: None,
+        created_at: None,
+        updated_at: None,
+        birth_date: None,
+        login_time: None,
+    }
+}
+
+fn epoch() -> chrono::NaiveDateTime {
+    chrono::NaiveDate::from_ymd_opt(2026, 1, 1)
+        .unwrap()
+        .and_hms_opt(0, 0, 0)
+        .unwrap()
+}
+
+fn sample_product(sku: &str) -> Products {
+    Products {
+        sku: sku.to_string(),
+        name: sku.to_string(),
+        price: rust_decimal::Decimal::new(100, 0),
+        stock: None,
+        status: None,
+    }
+}
+
+#[tokio::test]
+#[serial]
+async fn test_edges_to_one_attach_detach_inverse() {
+    let pool = MySqlPool::new(get_db_url()).unwrap();
+    clean_all_tables(&pool).await;
+
+    let user_id = dao::users::insert(&pool, &sample_user("reviewer"))
+        .await
+        .unwrap();
+    dao::products::insert(&pool, &sample_product("sku-a"))
+        .await
+        .unwrap();
+
+    let mut review = ProductReviews {
+        id: 0,
+        product_sku: "sku-a".to_string(),
+        reviewer_id: None,
+        rating: 5,
+        body: None,
+        created_at: epoch(),
+    };
+    review.id = dao::product_reviews::insert(&pool, &review).await.unwrap() as i64;
+
+    // Required to-one edge (comment-declared): follows to the target row.
+    let product = review.product(&pool).await.unwrap();
+    assert_eq!(product.sku, "sku-a");
+
+    // Nullable to-one edge: None until attached, Some after, None after detach.
+    assert!(review.reviewer(&pool).await.unwrap().is_none());
+    review
+        .attach_reviewer(&pool, &(user_id as i64))
+        .await
+        .unwrap();
+    review.reviewer_id = Some(user_id as i64);
+    let reviewer = review.reviewer(&pool).await.unwrap().expect("attached");
+    assert_eq!(reviewer.username, "reviewer");
+    review.detach_reviewer(&pool).await.unwrap();
+    review.reviewer_id = None;
+    assert!(review.reviewer(&pool).await.unwrap().is_none());
+
+    // Inverse collection reader on the target struct (row was detached).
+    let user = dao::users::find_by_id(&pool, user_id as i64)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(user.product_reviews(&pool).await.unwrap().len(), 0);
+
+    // Child creation with the edge pre-set: on users the edge is the
+    // reviewer column, so the FK comes from the user row.
+    let mut review2 = ProductReviews {
+        id: 0,
+        product_sku: "sku-a".to_string(),
+        reviewer_id: None,
+        rating: 4,
+        body: None,
+        created_at: epoch(),
+    };
+    user.create_product_review(&pool, &mut review2)
+        .await
+        .unwrap();
+    assert_eq!(review2.reviewer_id, Some(user.id));
+    assert_eq!(user.product_reviews(&pool).await.unwrap().len(), 1);
+
+    // Same-named inverse on products binds the product_sku column.
+    let product_row = dao::products::find_by_sku(&pool, "sku-a")
+        .await
+        .unwrap()
+        .unwrap();
+    let mut review3 = ProductReviews {
+        id: 0,
+        product_sku: String::new(),
+        reviewer_id: None,
+        rating: 3,
+        body: None,
+        created_at: epoch(),
+    };
+    product_row
+        .create_product_review(&pool, &mut review3)
+        .await
+        .unwrap();
+    assert_eq!(review3.product_sku, "sku-a");
+}
+
+#[tokio::test]
+#[serial]
+async fn test_edges_many_to_many() {
+    let pool = MySqlPool::new(get_db_url()).unwrap();
+    clean_all_tables(&pool).await;
+
+    dao::products::insert(&pool, &sample_product("sku-m"))
+        .await
+        .unwrap();
+    let mut tag1 = Tags {
+        id: 0,
+        label: "tag1".to_string(),
+    };
+    let mut tag2 = Tags {
+        id: 0,
+        label: "tag2".to_string(),
+    };
+    let tag1_id = dao::tags::insert(&pool, &tag1).await.unwrap() as i64;
+    let tag2_id = dao::tags::insert(&pool, &tag2).await.unwrap() as i64;
+    tag1.id = tag1_id;
+    tag2.id = tag2_id;
+
+    let product = dao::products::find_by_sku(&pool, "sku-m")
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(product.count_tags(&pool).await.unwrap(), 0);
+
+    product.link_tag(&pool, &tag1_id).await.unwrap();
+    // Idempotent link.
+    product.link_tag(&pool, &tag1_id).await.unwrap();
+    product.link_tag(&pool, &tag2_id).await.unwrap();
+    assert_eq!(product.count_tags(&pool).await.unwrap(), 2);
+    let mut labels: Vec<String> = product
+        .tags(&pool)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|t| t.label)
+        .collect();
+    labels.sort();
+    assert_eq!(labels, vec!["tag1".to_string(), "tag2".to_string()]);
+
+    // Inverse direction on the tag struct.
+    assert_eq!(tag2.products(&pool).await.unwrap().len(), 1);
+
+    product.unlink_tag(&pool, &tag1_id).await.unwrap();
+    assert_eq!(product.count_tags(&pool).await.unwrap(), 1);
+    product.clear_tags(&pool).await.unwrap();
+    assert_eq!(product.count_tags(&pool).await.unwrap(), 0);
+
+    // Transactional insert-with-links.
+    Products::insert_with_tags(&pool, &sample_product("sku-w"), &[tag1_id, tag2_id])
+        .await
+        .unwrap();
+    let p2 = dao::products::find_by_sku(&pool, "sku-w")
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(p2.count_tags(&pool).await.unwrap(), 2);
+}
+
+#[tokio::test]
+#[serial]
+async fn test_edge_builder_save() {
+    let pool = MySqlPool::new(get_db_url()).unwrap();
+    clean_all_tables(&pool).await;
+
+    let tag_id = dao::tags::insert(
+        &pool,
+        &Tags {
+            id: 0,
+            label: "bt".into(),
+        },
+    )
+    .await
+    .unwrap() as i64;
+
+    // m:n builder: save inserts the row and its link rows in one tx.
+    dao::products::NewProducts::new(
+        "sku-b".into(),
+        "Builder".into(),
+        rust_decimal::Decimal::new(5, 0),
+    )
+    .link_tag(tag_id)
+    .save(&pool)
+    .await
+    .unwrap();
+    let p = dao::products::find_by_sku(&pool, "sku-b")
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(p.count_tags(&pool).await.unwrap(), 1);
+
+    // To-one builder: edge set from the target row.
+    let user = dao::users::find_by_id(
+        &pool,
+        dao::users::insert(&pool, &sample_user("builder"))
+            .await
+            .unwrap() as i64,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    dao::products::insert(&pool, &sample_product("sku-c"))
+        .await
+        .unwrap();
+    dao::product_reviews::NewProductReviews::new(3)
+        .product_sku("sku-c".into())
+        .reviewer(&user)
+        .save(&pool)
+        .await
+        .unwrap();
+    let reviews = user.product_reviews(&pool).await.unwrap();
+    assert_eq!(reviews.len(), 1);
+    assert_eq!(reviews[0].reviewer_id, Some(user.id));
+
+    // A NOT NULL edge left unset is a clean save-time error, not a panic.
+    let err = dao::product_reviews::NewProductReviews::new(3)
+        .reviewer(&user)
+        .save(&pool)
+        .await
+        .unwrap_err();
+    assert!(
+        err.to_string().contains("product_reviews.product_sku"),
+        "unexpected error: {err}"
+    );
 }

@@ -74,6 +74,7 @@ pub fn generate_daos(tables: &[TableMetadata], config: &CodegenConfig) -> Result
             output_dir,
             &config.models_module,
             &config.dao_module,
+            config.edges.enabled,
         )?;
     }
 
@@ -88,6 +89,7 @@ fn generate_dao_file(
     output_dir: &Path,
     models_module: &str,
     dao_module: &str,
+    with_edges: bool,
 ) -> Result<()> {
     let struct_name = to_struct_name(&table.name);
     let file_name = format!("{}.rs", heck::AsSnakeCase(&table.name));
@@ -246,12 +248,14 @@ fn generate_dao_file(
     ));
 
     // Append Ent-style edge traversal/mutation methods on the model struct.
-    code.push_str(&super::edge_generator::generate_edges(
-        table,
-        all_tables,
-        models_module,
-        dao_module,
-    ));
+    if with_edges {
+        code.push_str(&super::edge_generator::generate_edges(
+            table,
+            all_tables,
+            models_module,
+            dao_module,
+        ));
+    }
 
     let file_path = output_dir.join(&file_name);
     fs::write(&file_path, &code)?;

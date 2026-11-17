@@ -23,6 +23,22 @@ pub fn generate_edges(
     if table.edges.is_empty() && table.incoming_edges.is_empty() {
         return String::new();
     }
+    // Table include/exclude filtering can drop an edge's far side; those
+    // edges are silently not emitted rather than failing generation.
+    let present = |name: &str| tables.iter().any(|t| t.name == name);
+    let mut pruned: Option<TableMetadata> = None;
+    if !table.edges.iter().all(|e| present(&e.target_table))
+        || !table.incoming_edges.iter().all(|i| present(&i.other_table))
+    {
+        let mut t = table.clone();
+        t.edges.retain(|e| present(&e.target_table));
+        t.incoming_edges.retain(|i| present(&i.other_table));
+        pruned = Some(t);
+    }
+    let table = pruned.as_ref().unwrap_or(table);
+    if table.edges.is_empty() && table.incoming_edges.is_empty() {
+        return String::new();
+    }
     let struct_name = to_struct_name(&table.name);
 
     // Referenced model types -> imports (BTreeSet semantics via BTreeMap keys).
@@ -74,7 +90,7 @@ pub fn generate_edges(
     let mut code = String::new();
     code.push_str("\n// ---- Edges ----\n\n");
     if needs_tx {
-        code.push_str("use rdbi::{Transaction as _, Transactional as _};\n\n");
+        code.push_str("use rdbi::Transaction as _;\n\n");
     }
     for (ty, ()) in &imports {
         code.push_str(&format!("use crate::{models_module}::{ty};\n"));
@@ -491,7 +507,7 @@ CREATE TABLE post_tags (
         assert!(posts.contains("pub async fn insert_with_tags<P: rdbi::Transactional>"));
         assert!(posts.contains("pool.begin().await?"));
         assert!(posts.contains("tx.commit().await?"));
-        assert!(posts.contains("use rdbi::{Transaction as _, Transactional as _};"));
+        assert!(posts.contains("use rdbi::Transaction as _;"));
 
         let tags = edges_for(&tables, "tags");
         assert!(tags.contains("pub async fn posts<P: Pool>(&self, pool: &P) -> Result<Vec<Posts>>"));

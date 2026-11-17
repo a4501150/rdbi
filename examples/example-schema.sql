@@ -286,3 +286,33 @@ CREATE TABLE order_item_details (
         REFERENCES order_items(order_id, product_id, variant_id) ON DELETE CASCADE,
     INDEX idx_detail_type (detail_type)
 );
+
+-- ============================================================
+-- Edges: comment-directive annotations (work without any FK
+-- constraints) and a many-to-many link table
+-- ============================================================
+
+CREATE TABLE tags (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    label VARCHAR(50) NOT NULL UNIQUE
+);
+
+CREATE TABLE product_tags (
+    product_sku VARCHAR(50) NOT NULL COMMENT 'rdbi:edge products(sku)',
+    tag_id BIGINT NOT NULL COMMENT 'rdbi:edge tags(id)',
+    PRIMARY KEY (product_sku, tag_id)
+);
+
+-- product_tags converts to a products <-> tags many-to-many.
+-- product_reviews adds a required and a nullable to-one edge below.
+
+CREATE TABLE product_reviews (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    product_sku VARCHAR(50) NOT NULL COMMENT 'rdbi:edge products(sku)',
+    reviewer_id BIGINT NULL COMMENT 'reviewer role; rdbi:edge users(id) name=reviewer',
+    rating INT NOT NULL,
+    body TEXT,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY ux_product_reviewer (product_sku, reviewer_id),
+    INDEX idx_reviewer (reviewer_id)
+);

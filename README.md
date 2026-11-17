@@ -127,6 +127,43 @@ async fn main() -> rdbi::Result<()> {
 
 > **Note:** The generated code under `src/generated/` should be committed to version control. This ensures IDE support works without building, and changes are reviewable in PRs. Run `cargo build` to regenerate after schema changes.
 
+### Edges (relationship traversal and mutations)
+
+Declare relationships in the schema — either inline in a column comment, or via a real
+`FOREIGN KEY` (every FK becomes an edge unless `edges.auto_from_foreign_keys = false`).
+Comment directives work with zero FK constraints:
+
+```sql
+CREATE TABLE product_reviews (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    product_sku VARCHAR(50) NOT NULL COMMENT 'rdbi:edge products(sku)',
+    reviewer_id BIGINT NULL COMMENT 'rdbi:edge users(id) name=reviewer',
+    rating INT NOT NULL
+);
+```
+
+Directive grammar: `rdbi:edge <table>[(<col>)] [name=..] [one|many] [no_inverse]`, several per
+comment separated by `;`; other comment text stays the column's doc comment. A table whose whole
+2-column PK is its two edge columns is a link table and produces many-to-many edges on both sides.
+
+Generated on the model struct (deterministic, lexical order):
+
+- To-one / one-to-one readers (`review.product(pool)`, `Option` when the column is nullable),
+  `attach_*`, and `detach_*` for nullable columns.
+- Inverse readers on the target (`user.product_reviews(pool)` — or singular when the source
+  column is UNIQUE), plus `create_product_review(pool, &mut row)` which inserts a child with the
+  edge pre-set.
+- Many-to-many: readers, `count_*`, `link_*` / `unlink_*` / `clear_*` and
+  `Products::insert_with_tags(pool, &row, &[ids])` (one transaction).
+- A `New{Struct}` builder for tables with edges: required columns positional, edge set by passing
+  the target row, m:n links applied by `save(pool)` in one transaction:
+  `NewProducts::new(sku, name, price).link_tag(id).save(&pool)`.
+
+Config (TOML / `RDBI_CODEGEN_` env / `[package.metadata.rdbi-codegen.edges]`):
+`edges.enabled` (default `true`) turns all of this off; `edges.auto_from_foreign_keys`
+(default `true`) only affects FK-derived edges. See `examples/example-schema.sql` for a full
+demo and `rdbi-codegen/tests/golden/` for the exact emitted shape.
+
 <details>
 <summary>Alternative: OUT_DIR with include!()</summary>
 
