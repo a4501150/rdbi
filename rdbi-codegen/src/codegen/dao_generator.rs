@@ -68,14 +68,27 @@ pub fn generate_daos(tables: &[TableMetadata], config: &CodegenConfig) -> Result
 
     // Generate each DAO file
     for table in tables {
-        generate_dao_file(table, output_dir, &config.models_module)?;
+        generate_dao_file(
+            table,
+            tables,
+            output_dir,
+            &config.models_module,
+            &config.dao_module,
+        )?;
     }
 
     Ok(())
 }
 
-/// Generate a single DAO file for a table
-fn generate_dao_file(table: &TableMetadata, output_dir: &Path, models_module: &str) -> Result<()> {
+/// Generate a single DAO file for a table (`all_tables` is needed so edge
+/// methods can reference other tables' columns and DAO modules).
+fn generate_dao_file(
+    table: &TableMetadata,
+    all_tables: &[TableMetadata],
+    output_dir: &Path,
+    models_module: &str,
+    dao_module: &str,
+) -> Result<()> {
     let struct_name = to_struct_name(&table.name);
     let file_name = format!("{}.rs", heck::AsSnakeCase(&table.name));
     debug!("Generating DAO for {} -> {}", struct_name, file_name);
@@ -230,6 +243,14 @@ fn generate_dao_file(table: &TableMetadata, output_dir: &Path, models_module: &s
         &struct_name,
         &select_columns,
         models_module,
+    ));
+
+    // Append Ent-style edge traversal/mutation methods on the model struct.
+    code.push_str(&super::edge_generator::generate_edges(
+        table,
+        all_tables,
+        models_module,
+        dao_module,
     ));
 
     let file_path = output_dir.join(&file_name);

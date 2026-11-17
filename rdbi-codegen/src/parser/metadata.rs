@@ -64,6 +64,8 @@ pub struct InverseEdge {
     pub to_one: bool,
     /// The source table (for generating the query).
     pub other_table: String,
+    /// The column on THIS table (edge target_column) the inverse binds.
+    pub local_column: String,
     /// The source column queried by the reader.
     pub other_column: String,
 }
@@ -77,6 +79,8 @@ pub struct IncomingEdge {
     pub other_table: String,
     /// The FK column in `other_table` pointing at this table.
     pub other_column: String,
+    /// The column on this table the reader binds (the edge's target column).
+    pub local_column: String,
 }
 
 /// Link-table location for a many-to-many edge.

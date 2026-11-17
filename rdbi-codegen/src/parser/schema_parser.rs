@@ -520,7 +520,7 @@ fn resolve_edges(
                     name: d.name.clone().unwrap_or_default(),
                     source_column: d.source_column.clone(),
                     target_table: d.target_table.clone(),
-                    target_column: tcol,
+                    target_column: tcol.clone(),
                     cardinality,
                     nullable: scol.nullable,
                     inverse: if d.no_inverse {
@@ -530,6 +530,7 @@ fn resolve_edges(
                             name: String::new(),
                             to_one: cardinality == EdgeCardinality::OneToOne,
                             other_table: table.name.clone(),
+                            local_column: tcol.clone(),
                             other_column: d.source_column.clone(),
                         })
                     },
@@ -670,6 +671,7 @@ fn resolve_edges(
             to_one: inv.to_one,
             other_table: inv.other_table,
             other_column: inv.other_column,
+            local_column: inv.local_column,
         });
     }
     for (t, inc) in tables.iter_mut().zip(incoming) {
@@ -823,19 +825,6 @@ fn extract_ident_from_index_column(ic: &IndexColumn) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn make_col(name: &str, ty: &str) -> ColumnMetadata {
-        ColumnMetadata {
-            name: name.to_string(),
-            data_type: ty.to_string(),
-            nullable: false,
-            default_value: None,
-            is_auto_increment: false,
-            is_unsigned: false,
-            enum_values: None,
-            comment: None,
-        }
-    }
 
     #[test]
     fn test_parse_simple_table() {
