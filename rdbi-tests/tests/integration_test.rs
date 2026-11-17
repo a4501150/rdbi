@@ -635,8 +635,8 @@ async fn test_all_integer_types() {
         medium_unsigned: Some(16777215),
         int_unsigned: Some(4294967295),
         bigint_signed: Some(9223372036854775807),
-        float_val: Some(3.14),
-        double_val: Some(2.71828),
+        float_val: Some(3.15),
+        double_val: Some(2.72),
         decimal_val: Some(rust_decimal::Decimal::new(123456789, 4)),
         event_time: None,
         binary_data: None,
@@ -1740,7 +1740,7 @@ async fn test_bulk_find_by_statuses() {
             email: format!("status{}@example.com", i),
             first_name: None,
             last_name: None,
-            status: status.clone(),
+            status: *status,
             is_active: true,
             age: None,
             created_at: None,
@@ -2123,7 +2123,7 @@ async fn test_transaction_with_macro_isolation_level() {
 #[serial]
 async fn test_error_other_variant() {
     // Test that Error::Other can wrap arbitrary errors
-    let custom_err = std::io::Error::new(std::io::ErrorKind::Other, "custom io error");
+    let custom_err = std::io::Error::other("custom io error");
     let rdbi_err = rdbi::Error::Other(Box::new(custom_err));
     assert_eq!(rdbi_err.to_string(), "custom io error");
 

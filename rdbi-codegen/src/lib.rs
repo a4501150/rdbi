@@ -408,3 +408,70 @@ pub fn generate_from_cargo_metadata() -> Result<()> {
 
     builder.generate()
 }
+
+#[cfg(test)]
+mod determinism_tests {
+    use super::*;
+    use std::collections::BTreeMap;
+    use std::fs;
+    use std::path::Path;
+
+    fn collect_files(dir: &Path) -> BTreeMap<String, Vec<u8>> {
+        let mut out = BTreeMap::new();
+        for entry in fs::read_dir(dir).expect("read dir") {
+            let entry = entry.expect("entry");
+            let path = entry.path();
+            if path.is_dir() {
+                for (name, bytes) in collect_files(&path) {
+                    out.insert(
+                        format!("{}/{}", path.file_name().unwrap().to_str().unwrap(), name),
+                        bytes,
+                    );
+                }
+            } else {
+                out.insert(
+                    path.file_name().unwrap().to_str().unwrap().to_string(),
+                    fs::read(&path).unwrap(),
+                );
+            }
+        }
+        out
+    }
+
+    fn generate_into(root: &Path) -> BTreeMap<String, Vec<u8>> {
+        let schema = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .join("examples/example-schema.sql");
+        let config = CodegenConfig {
+            schema_file: schema,
+            output_structs_dir: root.join("models"),
+            output_dao_dir: root.join("dao"),
+            ..CodegenConfig::default()
+        };
+        config.validate().expect("config");
+        generate(&config).expect("generate");
+        collect_files(root)
+    }
+
+    /// Codegen output must be byte-identical across runs (no hash-map ordering),
+    /// which is what lets consuming repos commit generated files without churn.
+    #[test]
+    fn double_run_is_byte_identical() {
+        let base = std::env::temp_dir().join(format!("rdbi-determinism-{}", std::process::id()));
+        let a = base.join("a");
+        let b = base.join("b");
+        let files_a = generate_into(&a);
+        let files_b = generate_into(&b);
+        assert!(!files_a.is_empty(), "example schema produced no files");
+        assert_eq!(
+            files_a.keys().collect::<Vec<_>>(),
+            files_b.keys().collect::<Vec<_>>(),
+            "file sets differ"
+        );
+        for (name, bytes_a) in &files_a {
+            assert_eq!(bytes_a, &files_b[name], "generated file differs: {name}");
+        }
+        let _ = fs::remove_dir_all(&base);
+    }
+}

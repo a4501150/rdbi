@@ -167,10 +167,10 @@ fn generate_dao_file(table: &TableMetadata, output_dir: &Path, models_module: &s
         code.push_str(&generate_update_plain_method(table, &column_map));
     }
 
-    // Generate index-aware findBy methods (sorted so output is deterministic)
+    // Generate index-aware findBy methods (collect_method_signatures returns them
+    // fully sorted so output is deterministic)
     let signatures = collect_method_signatures(table);
-    let mut sorted_signatures: Vec<&MethodSignature> = signatures.values().collect();
-    sorted_signatures.sort_by_key(|s| s.method_name.clone());
+    let sorted_signatures: Vec<&MethodSignature> = signatures.iter().collect();
 
     for sig in &sorted_signatures {
         // Skip if this is the primary key (already generated separately)
@@ -1022,52 +1022,62 @@ Query::new("SELECT COUNT(*) FROM `{table_name}` WHERE {where_clause}")
 }
 
 /// Collect method signatures with priority-based deduplication
-fn collect_method_signatures(table: &TableMetadata) -> HashMap<Vec<String>, MethodSignature> {
-    let mut signatures: HashMap<Vec<String>, MethodSignature> = HashMap::new();
+/// Collect find/update/delete/count method signatures, deduplicated per column set
+/// by priority (PK > Unique > Non-Unique > FK), then sorted by a full lexical key
+/// `(method_name, columns)` so the generated file is byte-deterministic.
+fn collect_method_signatures(table: &TableMetadata) -> Vec<MethodSignature> {
+    let mut signatures: Vec<MethodSignature> = Vec::new();
+
+    let mut push =
+        |sig: MethodSignature| match signatures.iter_mut().find(|s| s.columns == sig.columns) {
+            Some(existing) => {
+                if sig.priority < existing.priority {
+                    *existing = sig;
+                }
+            }
+            None => signatures.push(sig),
+        };
 
     // Priority 1: Primary key
     if let Some(pk) = &table.primary_key {
-        let sig = MethodSignature::new(
+        push(MethodSignature::new(
             pk.columns.clone(),
             PRIORITY_PRIMARY_KEY,
             true,
             "PRIMARY_KEY",
-        );
-        signatures.insert(pk.columns.clone(), sig);
+        ));
     }
 
     // Priority 2 & 3: Indexes
     for index in &table.indexes {
-        let priority = if index.unique {
-            PRIORITY_UNIQUE_INDEX
+        let (priority, source) = if index.unique {
+            (PRIORITY_UNIQUE_INDEX, "UNIQUE_INDEX")
         } else {
-            PRIORITY_NON_UNIQUE_INDEX
+            (PRIORITY_NON_UNIQUE_INDEX, "NON_UNIQUE_INDEX")
         };
-        let source = if index.unique {
-            "UNIQUE_INDEX"
-        } else {
-            "NON_UNIQUE_INDEX"
-        };
-        let sig = MethodSignature::new(index.columns.clone(), priority, index.unique, source);
-
-        // Only add if no higher priority signature exists
-        if let Some(existing) = signatures.get(&index.columns) {
-            if sig.priority < existing.priority {
-                signatures.insert(index.columns.clone(), sig);
-            }
-        } else {
-            signatures.insert(index.columns.clone(), sig);
-        }
+        push(MethodSignature::new(
+            index.columns.clone(),
+            priority,
+            index.unique,
+            source,
+        ));
     }
 
     // Priority 4: Foreign keys
     for fk in &table.foreign_keys {
-        let columns = vec![fk.column_name.clone()];
-        let sig = MethodSignature::new(columns.clone(), PRIORITY_FOREIGN_KEY, false, "FOREIGN_KEY");
-
-        signatures.entry(columns).or_insert(sig);
+        push(MethodSignature::new(
+            vec![fk.column_name.clone()],
+            PRIORITY_FOREIGN_KEY,
+            false,
+            "FOREIGN_KEY",
+        ));
     }
 
+    signatures.sort_by(|a, b| {
+        a.method_name
+            .cmp(&b.method_name)
+            .then_with(|| a.columns.cmp(&b.columns))
+    });
     signatures
 }
 
@@ -1608,17 +1618,29 @@ mod tests {
         // Should have signatures for: id (PK), email (unique), status (non-unique)
         assert_eq!(sigs.len(), 3);
 
-        let id_sig = sigs.get(&vec!["id".to_string()]).unwrap();
+        let find = |cols: &[&str]| {
+            sigs.iter()
+                .find(|s| s.columns == cols.iter().map(|c| c.to_string()).collect::<Vec<_>>())
+                .unwrap_or_else(|| panic!("no signature for {cols:?}"))
+        };
+
+        let id_sig = find(&["id"]);
         assert!(id_sig.is_unique);
         assert_eq!(id_sig.priority, PRIORITY_PRIMARY_KEY);
 
-        let email_sig = sigs.get(&vec!["email".to_string()]).unwrap();
+        let email_sig = find(&["email"]);
         assert!(email_sig.is_unique);
         assert_eq!(email_sig.priority, PRIORITY_UNIQUE_INDEX);
 
-        let status_sig = sigs.get(&vec!["status".to_string()]).unwrap();
+        let status_sig = find(&["status"]);
         assert!(!status_sig.is_unique);
         assert_eq!(status_sig.priority, PRIORITY_NON_UNIQUE_INDEX);
+
+        // Emission order is a full lexical sort, never insertion or hash order.
+        let names: Vec<&str> = sigs.iter().map(|s| s.method_name.as_str()).collect();
+        let mut sorted = names.clone();
+        sorted.sort_unstable();
+        assert_eq!(names, sorted);
     }
 
     #[test]
