@@ -266,11 +266,7 @@ impl TypeResolver {
         }
 
         // BIT(1)
-        if Self::is_bit_1(data_type_lower) {
-            return true;
-        }
-
-        false
+        Self::is_bit_1(data_type_lower)
     }
 
     /// Check if this is a BIT(1) type
