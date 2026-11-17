@@ -1,5 +1,6 @@
 //! Code generation module
 
+mod builder_generator;
 mod code_generator;
 mod dao_generator;
 pub(crate) mod edge_generator;

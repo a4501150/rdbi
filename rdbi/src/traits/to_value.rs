@@ -155,3 +155,11 @@ impl<T: ToValue> ToValue for &T {
         (*self).to_value()
     }
 }
+
+// Identity conversion: values already in dynamic form can be bound directly
+// (used by generated builders that assemble `Vec<Value>` parameter lists).
+impl ToValue for crate::Value {
+    fn to_value(&self) -> Value {
+        self.clone()
+    }
+}

@@ -88,6 +88,12 @@ pub fn generate_edges(
         code.push('\n');
     }
     code.push_str("}\n");
+    code.push_str(&super::builder_generator::generate_builder(
+        table,
+        tables,
+        models_module,
+        dao_module,
+    ));
     code
 }
 
@@ -99,10 +105,15 @@ fn find<'a>(tables: &'a [TableMetadata], name: &str) -> &'a TableMetadata {
 }
 
 /// Rust type of one column (inner, fully qualified for chrono/decimal).
-fn col_ty(t: &TableMetadata, col: &str) -> String {
+pub(crate) fn col_ty(t: &TableMetadata, col: &str) -> String {
     let c = t
         .get_column(col)
         .unwrap_or_else(|| panic!("column `{}.{}` missing", t.name, col));
+    qualify_col(t, c)
+}
+
+/// Same as [`col_ty`] but from an already-looked-up column.
+pub(crate) fn qualify_col(t: &TableMetadata, c: &crate::parser::ColumnMetadata) -> String {
     qualify(
         TypeResolver::resolve(c, &t.name)
             .inner_type()
@@ -110,11 +121,11 @@ fn col_ty(t: &TableMetadata, col: &str) -> String {
     )
 }
 
-fn qualify(ty: String) -> String {
-    if ty.contains("Naive") || ty == "DateTime" || ty.contains("DateTime<") {
-        format!("::chrono::{ty}")
-    } else if ty == "Decimal" {
-        "::rust_decimal::Decimal".to_string()
+/// Make a path type absolute so the section never depends on the file's
+/// imports (`chrono::NaiveDateTime` -> `::chrono::NaiveDateTime`).
+pub(crate) fn qualify(ty: String) -> String {
+    if ty.contains("::") && !ty.starts_with("::") {
+        format!("::{ty}")
     } else {
         ty
     }
@@ -133,18 +144,18 @@ fn select_cols(t: &TableMetadata, qualified: bool) -> String {
         .join(", ")
 }
 
-fn field(col: &str) -> String {
+pub(crate) fn field(col: &str) -> String {
     escape_field_name(col)
 }
 
-fn single_pk(t: &TableMetadata) -> Option<String> {
+pub(crate) fn single_pk(t: &TableMetadata) -> Option<String> {
     t.primary_key
         .as_ref()
         .filter(|pk| pk.columns.len() == 1)
         .map(|pk| pk.columns[0].clone())
 }
 
-fn doc(lines: &[&str]) -> String {
+pub(crate) fn doc(lines: &[&str]) -> String {
     lines
         .iter()
         .map(|l| format!("/// {l}\n"))
@@ -495,6 +506,7 @@ CREATE TABLE post_tags (
     fn methods_are_lexically_sorted() {
         let tables = parse_schema(SCHEMA).unwrap();
         let posts = edges_for(&tables, "posts");
+        let posts = posts.split("// ---- Builder ----").next().unwrap();
         let names: Vec<&str> = posts
             .lines()
             .filter_map(|l| {
@@ -506,6 +518,34 @@ CREATE TABLE post_tags (
         let mut sorted = names.clone();
         sorted.sort();
         assert_eq!(names, sorted, "methods: {names:?}");
+    }
+
+    #[test]
+    fn builder_emission() {
+        let tables = parse_schema(SCHEMA).unwrap();
+        let posts = edges_for(&tables, "posts");
+        assert!(posts.contains("pub struct NewPosts"));
+        // Positional required columns exclude the edge FK column.
+        assert!(posts.contains("pub fn new(post_id: String, title: String) -> Self"));
+        // Edge: raw FK setter + target-row setter, NOT NULL checked at save.
+        assert!(posts.contains("pub fn owner_account_id(mut self, v: String) -> Self"));
+        assert!(posts.contains("pub fn account(mut self, target: &Accounts) -> Self"));
+        assert!(posts.contains("UnexpectedNull(\"posts.owner_account_id\""));
+        // m:n accumulators + transactional save.
+        assert!(posts.contains("pub fn link_tag(mut self, v: String) -> Self"));
+        assert!(posts.contains("pub fn tags(mut self, v: Vec<String>) -> Self"));
+        assert!(posts.contains("pub async fn save<P: rdbi::Transactional>"));
+        assert!(posts.contains("INSERT IGNORE INTO `post_tags`"));
+        assert!(posts.contains("INSERT INTO `posts`"));
+
+        // Target side: tags has only the m:n edge -> own PK positional, links.
+        let tags = edges_for(&tables, "tags");
+        assert!(tags.contains("pub struct NewTags"));
+        assert!(tags.contains("pub fn link_post(mut self, v: String) -> Self"));
+
+        // A table whose only edges are incoming gets no builder.
+        let accounts = edges_for(&tables, "accounts");
+        assert!(!accounts.contains("pub struct NewAccounts"));
     }
 
     #[test]
