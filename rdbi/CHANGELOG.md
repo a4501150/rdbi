@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/a4501150/rdbi/compare/rdbi-v0.5.1...rdbi-v0.6.0) (2026-11-17)
+
+
+### Features
+
+* **codegen:** emit New{Struct} create builders for tables with edges ([0b7b34c](https://github.com/a4501150/rdbi/commit/0b7b34cc7d2dd16c8c9d19e026c1da821731a11b))
+
 ## [0.5.1](https://github.com/a4501150/rdbi/compare/rdbi-v0.5.0...rdbi-v0.5.1) (2026-03-27)
 
 
