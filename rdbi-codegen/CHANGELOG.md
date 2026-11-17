@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.5.0](https://github.com/a4501150/rdbi/compare/rdbi-codegen-v0.4.0...rdbi-codegen-v0.5.0) (2026-11-17)
+
+
+### Features
+
+* **codegen:** EdgesConfig, edge demo schema, golden and integration coverage ([9d7d862](https://github.com/a4501150/rdbi/commit/9d7d8624dc16ae683eaeb8ef861daf81ad73eea6))
+* **codegen:** emit Ent-style edge traversal and mutation methods ([6921d1c](https://github.com/a4501150/rdbi/commit/6921d1c7a8a8c1a47706d6af8c2929f48ab5400e))
+* **codegen:** emit New{Struct} create builders for tables with edges ([0b7b34c](https://github.com/a4501150/rdbi/commit/0b7b34cc7d2dd16c8c9d19e026c1da821731a11b))
+* **codegen:** make method-signature emission fully deterministic ([4e55f46](https://github.com/a4501150/rdbi/commit/4e55f46f94cf71343bef9a6ed21a6be1e9ac3752))
+* **codegen:** parse rdbi:edge column-comment directives and FK-derived edges ([f2c3783](https://github.com/a4501150/rdbi/commit/f2c37836f69a00cce846ecc3e79ec29d57504592))
+
+
+### Bug Fixes
+
+* **codegen:** collapse needless_bool if-chain in is_boolean detection ([b7e81e3](https://github.com/a4501150/rdbi/commit/b7e81e37b6f7edfe0dafbbf2fc171422e1e1ce87))
+
 ## [0.4.0](https://github.com/a4501150/rdbi/compare/rdbi-codegen-v0.3.7...rdbi-codegen-v0.4.0) (2026-10-14)
 
 
