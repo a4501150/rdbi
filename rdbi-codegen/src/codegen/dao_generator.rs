@@ -1607,6 +1607,8 @@ mod tests {
             primary_key: Some(PrimaryKey {
                 columns: vec!["id".to_string()],
             }),
+            edges: vec![],
+            incoming_edges: vec![],
         }
     }
 

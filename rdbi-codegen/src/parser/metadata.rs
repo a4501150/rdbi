@@ -22,6 +22,91 @@ pub struct TableMetadata {
 
     /// Primary key (if any)
     pub primary_key: Option<PrimaryKey>,
+
+    /// Edges declared on this table (comment annotations + FK-derived), after
+    /// [`parse_schema`] resolves them: names unique, inverses computed.
+    #[serde(default)]
+    pub edges: Vec<EdgeMetadata>,
+
+    /// Inverse readers other tables' edges place on this struct, resolved by
+    /// [`parse_schema`]. Emitted as impl methods on this table's model.
+    #[serde(default)]
+    pub incoming_edges: Vec<IncomingEdge>,
+}
+
+/// A single resolved edge from this table to another.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EdgeMetadata {
+    /// Unique method base name on the source struct (collision-resolved).
+    pub name: String,
+    /// Local column holding the referenced key.
+    pub source_column: String,
+    pub target_table: String,
+    /// Referenced column (the target's PK unless annotated otherwise).
+    pub target_column: String,
+    pub cardinality: EdgeCardinality,
+    /// Source column nullable -> readers return `Option`.
+    pub nullable: bool,
+    /// Reader generated on the target side (`None` with `no_inverse`).
+    pub inverse: Option<InverseEdge>,
+    /// For `ManyToMany`: the link (join) table and its two key columns.
+    pub link: Option<LinkInfo>,
+    pub source: EdgeSource,
+}
+
+/// The reader edge auto-generated on the target struct for a ToOne/OneToOne.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InverseEdge {
+    /// Method base name on the target struct (collision-resolved).
+    pub name: String,
+    /// true -> singular `Option` reader (source column is UNIQUE);
+    /// false -> collection reader.
+    pub to_one: bool,
+    /// The source table (for generating the query).
+    pub other_table: String,
+    /// The source column queried by the reader.
+    pub other_column: String,
+}
+
+/// Inverse reader placed on this table's struct by another table's edge.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IncomingEdge {
+    pub name: String,
+    pub to_one: bool,
+    /// The table this reader queries (holds the FK column).
+    pub other_table: String,
+    /// The FK column in `other_table` pointing at this table.
+    pub other_column: String,
+}
+
+/// Link-table location for a many-to-many edge.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LinkInfo {
+    pub table: String,
+    /// Link-table column referencing the source table's target_column.
+    pub source_column: String,
+    /// Link-table column referencing the target table's PK.
+    pub target_column: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EdgeCardinality {
+    /// FK column on this table; inverse is a collection (or none).
+    ToOne,
+    /// FK column UNIQUE; inverse is singular too.
+    OneToOne,
+    /// Via a two-column-PK link table; collection readers both sides.
+    ManyToMany,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EdgeSource {
+    /// Declared by a `rdbi:edge` column COMMENT directive.
+    Comment,
+    /// Derived from a real FOREIGN KEY constraint.
+    ForeignKey,
+    /// Declared both ways; merged into one edge.
+    Both,
 }
 
 /// Metadata for a column

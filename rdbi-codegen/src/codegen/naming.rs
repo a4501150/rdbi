@@ -155,6 +155,114 @@ pub fn pluralize(word: &str) -> String {
     format!("{}s", word)
 }
 
+/// Inverse of [`pluralize`]: map a plural word back to its singular form
+/// (edge method names). Mirrors the plural rules incl. the irregular table.
+pub fn singularize(word: &str) -> String {
+    if word.is_empty() {
+        return word.to_string();
+    }
+
+    let irregulars: &[(&str, &str)] = &[
+        ("people", "person"),
+        ("children", "child"),
+        ("men", "man"),
+        ("women", "woman"),
+        ("feet", "foot"),
+        ("teeth", "tooth"),
+        ("mice", "mouse"),
+        ("indices", "index"),
+    ];
+    for (plural, singular) in irregulars {
+        if word == *plural {
+            return singular.to_string();
+        }
+    }
+
+    // -ves -> -f/-fe (leaves -> leaf, knives -> knife)
+    if let Some(stripped) = word.strip_suffix("ves") {
+        let f_candidates = [
+            "leaf", "knife", "wife", "life", "shelf", "self", "half", "calf", "loaf", "thief",
+        ];
+        let as_f = format!("{stripped}f");
+        let as_fe = format!("{stripped}fe");
+        if f_candidates.contains(&as_f.as_str()) {
+            return as_f;
+        }
+        if f_candidates.contains(&as_fe.as_str()) {
+            return as_fe;
+        }
+    }
+
+    // -ies -> -y (companies -> company)
+    if let Some(stripped) = word.strip_suffix("ies") {
+        if word.len() > 3 {
+            return format!("{stripped}y");
+        }
+    }
+    // -es after a sibilant stem (addresses, boxes, matches, bushes) -> -es
+    for suffix in ["sses", "ses", "xes", "zes", "ches", "shes"] {
+        if word.ends_with(suffix) && word.len() > suffix.len() + 1 {
+            // "ses" only when the stem ends in a single s preceded by a
+            // vowel ("status" -> "statuses"), not "release(s)" style.
+            if suffix == "ses" {
+                let before = word.chars().nth(word.len() - 4);
+                match before {
+                    Some(c) if "aeiou".contains(c) => {}
+                    _ => continue,
+                }
+            }
+            return word[..word.len() - 2].to_string();
+        }
+    }
+    // Generic -s
+    if word.ends_with('s') && !word.ends_with("ss") && word.len() > 3 {
+        return word[..word.len() - 1].to_string();
+    }
+    word.to_string()
+}
+
+#[cfg(test)]
+mod singularize_tests {
+    use super::*;
+
+    #[test]
+    fn round_trips_through_pluralize() {
+        for w in [
+            "account",
+            "ticket",
+            "venue",
+            "message",
+            "status",
+            "address",
+            "box",
+            "match",
+            "group_activity",
+            "person",
+            "child",
+            "tag",
+        ] {
+            assert_eq!(singularize(&pluralize(w)), w, "round trip failed for {w}");
+        }
+    }
+}
+
+/// Pluralize a table name that may already be plural (table names are by
+/// convention plural; `pluralize` would happily produce "ticketses").
+pub fn pluralize_table(table: &str) -> String {
+    let snake = heck::AsSnakeCase(table).to_string();
+    if snake.ends_with('s') {
+        snake
+    } else {
+        pluralize(&snake)
+    }
+}
+
+/// Singularize a table name (no-op when already singular).
+pub fn singularize_table(table: &str) -> String {
+    let snake = heck::AsSnakeCase(table).to_string();
+    singularize(&snake)
+}
+
 /// Check if a name is a Rust reserved keyword
 pub fn is_rust_keyword(name: &str) -> bool {
     matches!(

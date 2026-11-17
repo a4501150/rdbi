@@ -2,7 +2,7 @@
 
 mod code_generator;
 mod dao_generator;
-mod naming;
+pub(crate) mod naming;
 mod struct_generator;
 mod type_resolver;
 
